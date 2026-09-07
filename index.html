@@ -53,6 +53,17 @@
     .shutter-btn:active .shutter-inner {
       transform: scale(0.88);
     }
+
+    /* Kanta Pembesar (Loupe) untuk pemotongan tepat */
+    .corner-pin {
+      position: absolute;
+      width: 32px;
+      height: 32px;
+      margin-left: -16px;
+      margin-top: -16px;
+      touch-action: none;
+      cursor: crosshair;
+    }
   </style>
 </head>
 <body class="bg-slate-950 text-slate-100 flex items-center justify-center font-sans antialiased selection:bg-emerald-500 selection:text-white fixed inset-0 w-full h-full overflow-hidden">
@@ -74,15 +85,15 @@
         </div>
         <div>
           <h1 class="font-black text-sm tracking-tight text-white flex items-center gap-1.5">
-            ImbasDok <span class="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-md font-mono uppercase tracking-wider">Mobile Pro</span>
+            ImbasDok <span class="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-md font-mono uppercase tracking-wider">Scanner Pro</span>
           </h1>
         </div>
       </div>
 
-      <!-- Butang Ke Galeri Halaman Atas -->
+      <!-- Butang Ke Senarai Halaman -->
       <button id="btn-gallery-list" onclick="app.showPageListModal()" class="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/90 hover:bg-slate-800 border border-slate-700/60 text-slate-200 active:scale-95 transition-all">
         <i data-lucide="folder-check" class="w-4 h-4 text-emerald-400"></i>
-        <span class="text-xs font-semibold" id="top-counter-label">0 Dokumen</span>
+        <span class="text-xs font-semibold" id="top-counter-label">0 Halaman</span>
       </button>
     </header>
 
@@ -92,8 +103,8 @@
       <!-- 1. VIEW KAMERA & IMBASAN -->
       <section id="view-camera" class="flex-1 flex flex-col relative bg-black min-h-0">
         
-        <!-- Pemilih Mod Imbasan (Segmented Tabs ala Native App) -->
-        <div class="shrink-0 bg-slate-950/75 backdrop-blur-md px-3 py-1.5 z-10">
+        <!-- Pemilih Mod Imbasan -->
+        <div class="shrink-0 bg-slate-950/85 backdrop-blur-md px-3 py-1.5 z-10">
           <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
             <button onclick="app.setMode('document')" id="tab-mode-document" class="mode-tab shrink-0 active px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all bg-emerald-600 text-white shadow-sm">
               <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
@@ -150,7 +161,7 @@
             </div>
             <h3 class="font-bold text-base text-white mb-1">Akses Kamera Tidak Aktif</h3>
             <p class="text-xs text-slate-400 max-w-xs mb-5 leading-relaxed">
-              Sila berikan kebenaran kamera atau pilih gambar dari galeri telefon pintar anda.
+              Sila berikan kebenaran kamera atau muat naik foto dokumen dari galeri telefon.
             </p>
             <label class="px-4 py-2.5 bg-emerald-600 active:scale-95 text-white font-medium rounded-xl cursor-pointer flex items-center gap-2 shadow-lg text-xs">
               <i data-lucide="image-plus" class="w-4 h-4"></i>
@@ -160,7 +171,7 @@
           </div>
         </div>
 
-        <!-- Kawalan Bar Bawah Native (Shutter Dock) -->
+        <!-- Kawalan Bar Bawah (Shutter Dock) -->
         <div class="shrink-0 bg-slate-950/95 border-t border-slate-900 px-6 pt-2 pb-safe flex items-center justify-between z-30">
           <!-- Thumbnail Pratonton Terakhir / Buka Senarai -->
           <div class="relative">
@@ -193,17 +204,85 @@
         </div>
       </section>
 
-      <!-- 2. VIEW EDITOR & PENAPIS (CAMSCANNER FILTERS) -->
+      <!-- 2. VIEW PELURUS PERSPEKTIF 4-SUDUT (CROP & DEWARP) -->
+      <section id="view-crop" class="hidden flex-1 flex flex-col bg-slate-950 min-h-0 relative">
+        
+        <!-- Bar Atas Pelurus -->
+        <div class="shrink-0 px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between z-20">
+          <button onclick="app.cancelCropping()" class="p-1.5 rounded-lg text-slate-400 hover:text-white flex items-center gap-1 text-xs font-medium active:scale-95">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            <span>Batal</span>
+          </button>
+          <div class="text-center">
+            <span class="font-bold text-xs text-white block">Luruskan Dokumen</span>
+            <span class="text-[10px] text-emerald-400">Tarik 4 bucu untuk ratakan</span>
+          </div>
+          <button onclick="app.confirmCrop()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow active:scale-95">
+            <span>Ratakan</span>
+            <i data-lucide="arrow-right" class="w-3.5 h-3.5"></i>
+          </button>
+        </div>
+
+        <!-- Kawasan Kanvas Interaktif Pemotong & Kanta Pembesar -->
+        <div class="flex-1 min-h-0 relative flex items-center justify-center p-3 bg-black/80 overflow-hidden" id="crop-stage">
+          <div id="crop-wrapper" class="relative max-w-full max-h-full touch-none select-none flex items-center justify-center">
+            <canvas id="crop-canvas" class="max-w-full max-h-[62vh] object-contain rounded-lg border border-slate-800 shadow-2xl block"></canvas>
+            <canvas id="crop-overlay-canvas" class="absolute inset-0 w-full h-full pointer-events-none"></canvas>
+
+            <!-- 4 Pin Penjuru Boleh Ditarik -->
+            <div id="pin-0" class="corner-pin flex items-center justify-center">
+              <div class="w-6 h-6 rounded-full bg-emerald-500 border-2 border-white shadow-xl flex items-center justify-center text-[9px] font-bold text-slate-950">TL</div>
+            </div>
+            <div id="pin-1" class="corner-pin flex items-center justify-center">
+              <div class="w-6 h-6 rounded-full bg-emerald-500 border-2 border-white shadow-xl flex items-center justify-center text-[9px] font-bold text-slate-950">TR</div>
+            </div>
+            <div id="pin-2" class="corner-pin flex items-center justify-center">
+              <div class="w-6 h-6 rounded-full bg-emerald-500 border-2 border-white shadow-xl flex items-center justify-center text-[9px] font-bold text-slate-950">BR</div>
+            </div>
+            <div id="pin-3" class="corner-pin flex items-center justify-center">
+              <div class="w-6 h-6 rounded-full bg-emerald-500 border-2 border-white shadow-xl flex items-center justify-center text-[9px] font-bold text-slate-950">BL</div>
+            </div>
+
+            <!-- Kanta Pembesar Semasa Menarik Bucu -->
+            <div id="loupe" class="hidden absolute top-4 left-4 z-40 w-24 h-24 rounded-full border-2 border-emerald-400 bg-black overflow-hidden shadow-2xl pointer-events-none">
+              <canvas id="loupe-canvas" width="96" height="96" class="w-full h-full"></canvas>
+              <!-- Palang sasaran tengah -->
+              <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <div class="w-4 h-0.5 bg-emerald-400"></div>
+                <div class="absolute h-4 w-0.5 bg-emerald-400"></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Butang Pantas Bawah untuk Reset Bucu -->
+        <div class="shrink-0 bg-slate-900/95 border-t border-slate-800 px-4 py-2.5 pb-safe flex items-center justify-around z-20 backdrop-blur-md">
+          <button onclick="app.resetCropCorners(0.04)" class="px-3 py-1.5 bg-slate-800 border border-slate-700/80 rounded-lg text-xs font-semibold text-slate-300 active:scale-95 flex items-center gap-1.5">
+            <i data-lucide="maximize" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>Penuh</span>
+          </button>
+          <button onclick="app.resetCropCorners(0.12)" class="px-3 py-1.5 bg-slate-800 border border-slate-700/80 rounded-lg text-xs font-semibold text-slate-300 active:scale-95 flex items-center gap-1.5">
+            <i data-lucide="crop" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>Auto-Bucu</span>
+          </button>
+          <button onclick="app.confirmCrop()" class="px-4 py-1.5 bg-emerald-600 text-white rounded-lg text-xs font-bold active:scale-95 flex items-center gap-1.5 shadow">
+            <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
+            <span>Luruskan Sekarang</span>
+          </button>
+        </div>
+      </section>
+
+      <!-- 3. VIEW EDITOR & PENAPIS (NATURAL SCANNER FILTER) -->
       <section id="view-editor" class="hidden flex-1 flex flex-col bg-slate-950 min-h-0">
         
         <!-- Bar Atas Editor -->
         <div class="shrink-0 px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
-          <button onclick="app.cancelEditing()" class="p-1.5 rounded-lg text-slate-400 hover:text-white flex items-center gap-1 text-xs font-medium active:scale-95">
-            <i data-lucide="chevron-left" class="w-4 h-4"></i>
-            <span>Batal</span>
+          <button onclick="app.backToCrop()" class="p-1.5 rounded-lg text-slate-400 hover:text-white flex items-center gap-1 text-xs font-medium active:scale-95">
+            <i data-lucide="crop" class="w-3.5 h-3.5"></i>
+            <span>Ubah Bucu</span>
           </button>
-          <span class="font-bold text-xs text-slate-200" id="editor-title">Laraskan Imej</span>
-          <button onclick="app.saveCurrentEdit()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow active:scale-95">
+          <span class="font-bold text-xs text-slate-200" id="editor-title">Laraskan Warna</span>
+          <button onclick="app.saveCurrentEdit()" class="px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow active:scale-95">
             <i data-lucide="check" class="w-3.5 h-3.5"></i>
             <span>Simpan</span>
           </button>
@@ -252,13 +331,13 @@
 
             <div class="flex-1 flex items-center gap-1.5 bg-slate-800/60 px-2 py-1 rounded-lg">
               <i data-lucide="contrast" class="w-3 h-3 text-slate-400"></i>
-              <input type="range" id="slider-contrast" min="-40" max="40" value="5" oninput="app.renderFilterPreview()" class="w-full accent-emerald-500 h-1 bg-slate-700 rounded-lg">
+              <input type="range" id="slider-contrast" min="-40" max="40" value="4" oninput="app.renderFilterPreview()" class="w-full accent-emerald-500 h-1 bg-slate-700 rounded-lg">
             </div>
           </div>
         </div>
       </section>
 
-      <!-- 3. VIEW PAPARAN HALAMAN (NATIVE MOBILE PAGE GALLERY) -->
+      <!-- 4. VIEW PAPARAN HALAMAN (PDF PAGE GALLERY) -->
       <section id="view-doc-list" class="hidden flex-1 flex flex-col bg-slate-950 min-h-0">
         <!-- Bar Navigasi Galeri -->
         <div class="shrink-0 px-4 py-3 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
@@ -269,7 +348,7 @@
           
           <div class="text-center">
             <h2 class="font-bold text-xs text-white">Senarai Halaman</h2>
-            <p id="pdf-page-subtext" class="text-[10px] text-slate-400">0 Muka Surat</p>
+            <p id="pdf-page-subtext" class="text-[10px] text-slate-400">0 Halaman</p>
           </div>
 
           <button onclick="app.clearAllPages()" class="p-2 text-rose-400 hover:text-rose-300 rounded-lg active:scale-95">
@@ -282,12 +361,12 @@
           <!-- Kad muka surat dimasukkan secara dinamik -->
         </div>
 
-        <!-- Tindakan Muat Turun Bawah Skrin -->
+        <!-- Tindakan Muat Turun Bawah Skrin (PDF Bersih Tanpa Teks Tambahan) -->
         <div class="shrink-0 p-3.5 bg-slate-900/95 border-t border-slate-800/90 pb-safe flex flex-col gap-2.5 backdrop-blur-xl">
           <div class="flex items-center justify-between text-[11px] text-slate-400 px-1 font-medium">
-            <span id="pdf-page-count-text">0 Muka Surat Disimpan</span>
+            <span id="pdf-page-count-text">0 Halaman Disimpan</span>
             <span class="text-emerald-400 flex items-center gap-1">
-              <i data-lucide="file-check" class="w-3.5 h-3.5"></i> Bersedia untuk PDF
+              <i data-lucide="check-circle" class="w-3.5 h-3.5"></i> Skala Sebenar (1:1 A4)
             </span>
           </div>
 
@@ -323,7 +402,9 @@
   <!-- ================= SKRIP LOGIK APLIKASI ================= -->
   <script>
     /**
-     * Aplikasi Pengimbas Dokumen Web & Kad Pintar (Ala CamScanner Mobile)
+     * Aplikasi Pengimbas Dokumen & Kad Pintar (Ala CamScanner)
+     * Dilengkapi Pelurus Perspektif 4-Bucu (Keystone Correction / Dewarping)
+     * serta Penjanaan PDF Bersih Tanpa Teks.
      */
     class CamScannerApp {
       constructor() {
@@ -335,10 +416,24 @@
         this.cardStep = 1;
         this.frontCardImage = null;
 
-        this.rawImage = new Image();
+        // Data Pemotongan & Pelurusan Bucu (Perspective Warping)
+        this.sourceImage = new Image();
+        this.corners = [
+          { x: 0, y: 0 }, // 0: Top-Left
+          { x: 1, y: 0 }, // 1: Top-Right
+          { x: 1, y: 1 }, // 2: Bottom-Right
+          { x: 0, y: 1 }  // 3: Bottom-Left
+        ];
+        this.activeDragIndex = -1;
+        this.cropDisplayScale = 1;
+        this.cropDisplayOffset = { x: 0, y: 0 };
+
+        // Data Suntingan Warna (Natural Color Filters)
+        this.straightenedImage = new Image();
         this.activeFilter = 'natural';
         this.rotation = 0;
 
+        // Senarai Semua Halaman Dokumen
         this.scannedPages = [];
         this.init();
       }
@@ -348,9 +443,10 @@
         this.startCamera();
         this.updateModeUI();
         this.updateBadgeCount();
+        this.setupCropEvents();
       }
 
-      /* Haptic maklum balas telefon bimbit */
+      /* Haptic maklum balas getaran telefon */
       haptic() {
         if (navigator.vibrate) {
           try { navigator.vibrate(18); } catch (e) {}
@@ -378,7 +474,7 @@
         setTimeout(() => {
           toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-[-20px]');
           toast.classList.remove('opacity-100', 'translate-y-0');
-        }, 2800);
+        }, 2600);
       }
 
       async startCamera() {
@@ -457,7 +553,7 @@
           cardIndicator.classList.remove('hidden');
           frame.className = "relative border-2 border-indigo-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-48 aspect-[1/1.586]";
           cardStepBadge.textContent = this.cardStep;
-          cardStepText.textContent = this.cardStep === 1 ? "Imbas DEPAN Kad Pelajar/Staf" : "Imbas BELAKANG Kad Pelajar/Staf";
+          cardStepText.textContent = this.cardStep === 1 ? "Imbas DEPAN Kad Staf/Pelajar" : "Imbas BELAKANG Kad Staf/Pelajar";
           label.textContent = "Kad Potret (Menegak)";
         }
       }
@@ -465,55 +561,19 @@
       captureCurrentFrame() {
         this.haptic();
         const video = this.video;
-        const guideFrame = document.getElementById('guide-frame');
-
         if (!video.videoWidth || !video.videoHeight) {
           this.showToast("Kamera belum bersedia", "error");
           return;
         }
 
-        const vRect = video.getBoundingClientRect();
-        const gRect = guideFrame.getBoundingClientRect();
-
-        const vw = video.videoWidth;
-        const vh = video.videoHeight;
-
-        const videoRatio = vw / vh;
-        const displayRatio = vRect.width / vRect.height;
-
-        let renderWidth, renderHeight, offsetX, offsetY;
-
-        if (displayRatio > videoRatio) {
-          renderWidth = vRect.width;
-          renderHeight = vRect.width / videoRatio;
-          offsetX = 0;
-          offsetY = (vRect.height - renderHeight) / 2;
-        } else {
-          renderHeight = vRect.height;
-          renderWidth = vRect.height * videoRatio;
-          offsetX = (vRect.width - renderWidth) / 2;
-          offsetY = 0;
-        }
-
-        const scale = vw / renderWidth;
-
-        let cropX = (gRect.left - vRect.left - offsetX) * scale;
-        let cropY = (gRect.top - vRect.top - offsetY) * scale;
-        let cropW = gRect.width * scale;
-        let cropH = gRect.height * scale;
-
-        cropX = Math.max(0, Math.min(vw - 10, cropX));
-        cropY = Math.max(0, Math.min(vh - 10, cropY));
-        cropW = Math.max(10, Math.min(vw - cropX, cropW));
-        cropH = Math.max(10, Math.min(vh - cropY, cropH));
-
         const canvas = document.createElement('canvas');
-        canvas.width = Math.round(cropW);
-        canvas.height = Math.round(cropH);
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
         const ctx = canvas.getContext('2d');
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
-        this.processCapturedImage(canvas.toDataURL('image/jpeg', 0.95));
+        const capturedDataUrl = canvas.toDataURL('image/jpeg', 0.96);
+        this.openCropPerspective(capturedDataUrl);
       }
 
       handleFileUpload(e) {
@@ -522,149 +582,422 @@
 
         const reader = new FileReader();
         reader.onload = (event) => {
-          this.processUploadedImage(event.target.result);
+          this.openCropPerspective(event.target.result);
         };
         reader.readAsDataURL(file);
       }
 
-      processUploadedImage(dataUrl) {
-        const tempImg = new Image();
-        tempImg.onload = () => {
-          let targetRatio = null;
-          if (this.scanMode === 'idcard' || this.scanMode === 'license') {
-            targetRatio = 1.586;
-          } else if (this.scanMode === 'badge') {
-            targetRatio = 1 / 1.586;
-          }
-
-          if (targetRatio) {
-            const imgRatio = tempImg.width / tempImg.height;
-            let cropW, cropH, cropX, cropY;
-
-            if (imgRatio > targetRatio) {
-              cropH = tempImg.height;
-              cropW = cropH * targetRatio;
-              cropX = (tempImg.width - cropW) / 2;
-              cropY = 0;
-            } else {
-              cropW = tempImg.width;
-              cropH = cropW / targetRatio;
-              cropX = 0;
-              cropY = (tempImg.height - cropH) / 2;
-            }
-
-            const canvas = document.createElement('canvas');
-            canvas.width = Math.round(cropW);
-            canvas.height = Math.round(cropH);
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(tempImg, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
-            this.processCapturedImage(canvas.toDataURL('image/jpeg', 0.95));
-          } else {
-            this.processCapturedImage(dataUrl);
-          }
+      openCropPerspective(imageUrl) {
+        this.sourceImage = new Image();
+        this.sourceImage.onload = () => {
+          this.switchView('crop');
+          this.setupCropCanvas();
+          this.resetCropCorners(0.08); // Bucu automatik dengan sedikit inset
+          this.drawCropOverlay();
+          this.showToast("Tarik bucu untuk meluruskan dokumen");
         };
-        tempImg.src = dataUrl;
+        this.sourceImage.src = imageUrl;
       }
 
-      processCapturedImage(dataUrl) {
+      setupCropCanvas() {
+        const canvas = document.getElementById('crop-canvas');
+        const overlay = document.getElementById('crop-overlay-canvas');
+        const img = this.sourceImage;
+
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+
+        overlay.width = img.width;
+        overlay.height = img.height;
+      }
+
+      resetCropCorners(margin = 0.08) {
+        const w = this.sourceImage.width;
+        const h = this.sourceImage.height;
+
+        this.corners = [
+          { x: w * margin, y: h * margin },              // 0: TL
+          { x: w * (1 - margin), y: h * margin },          // 1: TR
+          { x: w * (1 - margin), y: h * (1 - margin) },  // 2: BR
+          { x: w * margin, y: h * (1 - margin) }           // 3: BL
+        ];
+        this.updatePinPositions();
+        this.drawCropOverlay();
+      }
+
+      updatePinPositions() {
+        const canvas = document.getElementById('crop-canvas');
+        const rect = canvas.getBoundingClientRect();
+        const wrapper = document.getElementById('crop-wrapper');
+        const wRect = wrapper.getBoundingClientRect();
+
+        const scaleX = rect.width / canvas.width;
+        const scaleY = rect.height / canvas.height;
+
+        this.corners.forEach((pt, i) => {
+          const pin = document.getElementById(`pin-${i}`);
+          const screenX = (rect.left - wRect.left) + pt.x * scaleX;
+          const screenY = (rect.top - wRect.top) + pt.y * scaleY;
+          pin.style.left = `${screenX}px`;
+          pin.style.top = `${screenY}px`;
+        });
+      }
+
+      drawCropOverlay() {
+        const overlay = document.getElementById('crop-overlay-canvas');
+        const ctx = overlay.getContext('2d');
+        const w = overlay.width;
+        const h = overlay.height;
+
+        ctx.clearRect(0, 0, w, h);
+
+        // Kawasan luar digelapkan
+        ctx.fillStyle = "rgba(0, 0, 0, 0.45)";
+        ctx.fillRect(0, 0, w, h);
+
+        // Potong kawasan dalam 4-bucu
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(this.corners[0].x, this.corners[0].y);
+        ctx.lineTo(this.corners[1].x, this.corners[1].y);
+        ctx.lineTo(this.corners[2].x, this.corners[2].y);
+        ctx.lineTo(this.corners[3].x, this.corners[3].y);
+        ctx.closePath();
+        ctx.clip();
+        ctx.clearRect(0, 0, w, h);
+        ctx.restore();
+
+        // Lukis garis sempadan poligon
+        ctx.strokeStyle = "#10b981";
+        ctx.lineWidth = Math.max(3, w / 280);
+        ctx.beginPath();
+        ctx.moveTo(this.corners[0].x, this.corners[0].y);
+        ctx.lineTo(this.corners[1].x, this.corners[1].y);
+        ctx.lineTo(this.corners[2].x, this.corners[2].y);
+        ctx.lineTo(this.corners[3].x, this.corners[3].y);
+        ctx.closePath();
+        ctx.stroke();
+
+        // Garis panduan grid 3x3 di dalam (rule of thirds)
+        ctx.strokeStyle = "rgba(16, 185, 129, 0.35)";
+        ctx.lineWidth = Math.max(1, w / 600);
+        for (let t = 1; t <= 2; t++) {
+          const ratio = t / 3;
+          // Garis mendatar
+          const leftX = this.corners[0].x + (this.corners[3].x - this.corners[0].x) * ratio;
+          const leftY = this.corners[0].y + (this.corners[3].y - this.corners[0].y) * ratio;
+          const rightX = this.corners[1].x + (this.corners[2].x - this.corners[1].x) * ratio;
+          const rightY = this.corners[1].y + (this.corners[2].y - this.corners[1].y) * ratio;
+          ctx.beginPath();
+          ctx.moveTo(leftX, leftY);
+          ctx.lineTo(rightX, rightY);
+          ctx.stroke();
+        }
+      }
+
+      setupCropEvents() {
+        const pins = [0, 1, 2, 3].map(i => document.getElementById(`pin-${i}`));
+        const stage = document.getElementById('crop-stage');
+        const loupe = document.getElementById('loupe');
+        const loupeCanvas = document.getElementById('loupe-canvas');
+        const lCtx = loupeCanvas.getContext('2d');
+
+        const onPointerDown = (idx, e) => {
+          e.preventDefault();
+          this.haptic();
+          this.activeDragIndex = idx;
+          loupe.classList.remove('hidden');
+          this.updateLoupe(this.corners[idx]);
+        };
+
+        pins.forEach((pin, idx) => {
+          pin.addEventListener('mousedown', (e) => onPointerDown(idx, e));
+          pin.addEventListener('touchstart', (e) => onPointerDown(idx, e), { passive: false });
+        });
+
+        const onPointerMove = (e) => {
+          if (this.activeDragIndex === -1) return;
+          e.preventDefault();
+
+          const canvas = document.getElementById('crop-canvas');
+          const rect = canvas.getBoundingClientRect();
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+
+          const scaleX = canvas.width / rect.width;
+          const scaleY = canvas.height / rect.height;
+
+          let posX = (clientX - rect.left) * scaleX;
+          let posY = (clientY - rect.top) * scaleY;
+
+          posX = Math.max(0, Math.min(canvas.width, posX));
+          posY = Math.max(0, Math.min(canvas.height, posY));
+
+          this.corners[this.activeDragIndex] = { x: posX, y: posY };
+          this.updatePinPositions();
+          this.drawCropOverlay();
+          this.updateLoupe(this.corners[this.activeDragIndex]);
+        };
+
+        const onPointerUp = () => {
+          if (this.activeDragIndex !== -1) {
+            this.activeDragIndex = -1;
+            loupe.classList.add('hidden');
+          }
+        };
+
+        window.addEventListener('mousemove', onPointerMove);
+        window.addEventListener('touchmove', onPointerMove, { passive: false });
+        window.addEventListener('mouseup', onPointerUp);
+        window.addEventListener('touchend', onPointerUp);
+
+        window.addEventListener('resize', () => {
+          if (!document.getElementById('view-crop').classList.contains('hidden')) {
+            this.updatePinPositions();
+            this.drawCropOverlay();
+          }
+        });
+      }
+
+      updateLoupe(targetPt) {
+        const loupe = document.getElementById('loupe');
+        const loupeCanvas = document.getElementById('loupe-canvas');
+        const ctx = loupeCanvas.getContext('2d');
+        const img = this.sourceImage;
+
+        const zoomSize = 60; // 60x60 source dipaparkan ke 96x96
+        const sx = targetPt.x - zoomSize / 2;
+        const sy = targetPt.y - zoomSize / 2;
+
+        ctx.fillStyle = "#0f172a";
+        ctx.fillRect(0, 0, loupeCanvas.width, loupeCanvas.height);
+        ctx.drawImage(img, sx, sy, zoomSize, zoomSize, 0, 0, loupeCanvas.width, loupeCanvas.height);
+
+        // Jika jari di sebelah kiri, alihkan kanta ke kanan supaya tidak terlindung
+        const canvas = document.getElementById('crop-canvas');
+        const rect = canvas.getBoundingClientRect();
+        const screenX = (targetPt.x / canvas.width) * rect.width;
+        if (screenX < rect.width / 2) {
+          loupe.style.left = 'auto';
+          loupe.style.right = '16px';
+        } else {
+          loupe.style.right = 'auto';
+          loupe.style.left = '16px';
+        }
+      }
+
+      cancelCropping() {
+        this.haptic();
+        this.switchView('camera');
+      }
+
+      /**
+       * Mengaplikasikan Transformasi Homografi 4-Titik (Projective Warp):
+       * Mengambil bentuk poligon 4-bucu yang senget dan membetulkannya
+       * menjadi satah segi empat tepat rata seperti scanner sebenar.
+       */
+      confirmCrop() {
+        this.haptic();
+        const [c0, c1, c2, c3] = this.corners;
+
+        // Kira jarak sebenar setiap sisi untuk dimensi rata yang optimum
+        const dist = (p1, p2) => Math.hypot(p2.x - p1.x, p2.y - p1.y);
+        const topW = dist(c0, c1);
+        const bottomW = dist(c3, c2);
+        const leftH = dist(c0, c3);
+        const rightH = dist(c1, c2);
+
+        let outW = Math.round(Math.max(topW, bottomW));
+        let outH = Math.round(Math.max(leftH, rightH));
+
+        // Laraskan nisbah aspek mengikut saiz piawai kad ID-1 (85.60 mm x 53.98 mm = 1.58577)
+        if (this.scanMode === 'idcard' || this.scanMode === 'license') {
+          const targetRatio = 85.60 / 53.98;
+          outW = Math.max(outW, 1000);
+          outH = Math.round(outW / targetRatio);
+        } else if (this.scanMode === 'badge') {
+          const targetRatio = 53.98 / 85.60;
+          outH = Math.max(outH, 1000);
+          outW = Math.round(outH * targetRatio);
+        }
+
+        // Hadkan saiz maksimum untuk kelajuan pemprosesan pantas di telefon
+        const maxDim = 1600;
+        if (outW > maxDim || outH > maxDim) {
+          const ratio = Math.min(maxDim / outW, maxDim / outH);
+          outW = Math.round(outW * ratio);
+          outH = Math.round(outH * ratio);
+        }
+
+        const straightenedCanvas = this.warpPerspective(this.sourceImage, this.corners, outW, outH);
+        const straightenedUrl = straightenedCanvas.toDataURL('image/jpeg', 0.95);
+
+        // Hantar ke pemprosesan kad atau terus ke editor dokumen
+        this.processStraightenedImage(straightenedUrl);
+      }
+
+      warpPerspective(srcImg, corners, outW, outH) {
+        // Cipta kanvas sumber
+        const srcCanvas = document.createElement('canvas');
+        srcCanvas.width = srcImg.width;
+        srcCanvas.height = srcImg.height;
+        const srcCtx = srcCanvas.getContext('2d');
+        srcCtx.drawImage(srcImg, 0, 0);
+
+        const srcData = srcCtx.getImageData(0, 0, srcCanvas.width, srcCanvas.height);
+        const sPixels = srcData.data;
+        const sw = srcCanvas.width;
+        const sh = srcCanvas.height;
+
+        // Cipta kanvas hasil
+        const destCanvas = document.createElement('canvas');
+        destCanvas.width = outW;
+        destCanvas.height = outH;
+        const destCtx = destCanvas.getContext('2d');
+        const destData = destCtx.createImageData(outW, outH);
+        const dPixels = destData.data;
+
+        // Pengiraan Matriks Pemetaan Unit-Square to Quadrilateral (Paul Heckbert)
+        const [p0, p1, p2, p3] = corners;
+        const dx1 = p1.x - p2.x;
+        const dx2 = p3.x - p2.x;
+        const sx = p0.x - p1.x + p2.x - p3.x;
+        const dy1 = p1.y - p2.y;
+        const dy2 = p3.y - p2.y;
+        const sy = p0.y - p1.y + p2.y - p3.y;
+
+        const det = dx1 * dy2 - dx2 * dy1;
+        let a, b, c, d, e, f, g, h;
+
+        if (Math.abs(det) < 1e-6) {
+          // Affine mapping
+          a = p1.x - p0.x;
+          b = p2.x - p1.x;
+          c = p0.x;
+          d = p1.y - p0.y;
+          e = p2.y - p1.y;
+          f = p0.y;
+          g = 0;
+          h = 0;
+        } else {
+          g = (sx * dy2 - sy * dx2) / det;
+          h = (dx1 * sy - dy1 * sx) / det;
+          a = p1.x - p0.x + g * p1.x;
+          b = p3.x - p0.x + h * p3.x;
+          c = p0.x;
+          d = p1.y - p0.y + g * p1.y;
+          e = p3.y - p0.y + h * p3.y;
+          f = p0.y;
+        }
+
+        // Pemetaan songsang piksel ke piksel dengan interpolasi
+        let destIdx = 0;
+        for (let y = 0; y < outH; y++) {
+          const v = y / outH;
+          for (let x = 0; x < outW; x++) {
+            const u = x / outW;
+            const wDenom = g * u + h * v + 1;
+            const srcX = Math.round((a * u + b * v + c) / wDenom);
+            const srcY = Math.round((d * u + e * v + f) / wDenom);
+
+            if (srcX >= 0 && srcX < sw && srcY >= 0 && srcY < sh) {
+              const srcIdx = (srcY * sw + srcX) * 4;
+              dPixels[destIdx] = sPixels[srcIdx];
+              dPixels[destIdx + 1] = sPixels[srcIdx + 1];
+              dPixels[destIdx + 2] = sPixels[srcIdx + 2];
+              dPixels[destIdx + 3] = 255;
+            } else {
+              dPixels[destIdx] = 255;
+              dPixels[destIdx + 1] = 255;
+              dPixels[destIdx + 2] = 255;
+              dPixels[destIdx + 3] = 255;
+            }
+            destIdx += 4;
+          }
+        }
+
+        destCtx.putImageData(destData, 0, 0);
+        return destCanvas;
+      }
+
+      processStraightenedImage(straightenedUrl) {
         if (this.scanMode === 'document') {
-          this.openEditor(dataUrl, "Dokumen A4");
+          this.openEditor(straightenedUrl, "Dokumen");
         } else {
           if (this.cardStep === 1) {
-            this.frontCardImage = dataUrl;
+            this.frontCardImage = straightenedUrl;
             this.cardStep = 2;
             this.updateModeUI();
-            this.showToast("DEPAN disimpan! Sila pusing kad ke BELAKANG.");
+            this.switchView('camera');
+            this.showToast("DEPAN disimpan! Sila imbas Bahagian BELAKANG.");
           } else {
-            this.combineCardTwoSides(this.frontCardImage, dataUrl, (compositeUrl) => {
+            // Gabungkan Bahagian Depan & Belakang secara kemas TANPA SEBARANG TEKS
+            this.combineCardTwoSidesClean(this.frontCardImage, straightenedUrl, (compositeUrl) => {
               this.cardStep = 1;
               this.frontCardImage = null;
               this.updateModeUI();
-              let title = 'Salinan Kad Pintar';
-              if (this.scanMode === 'idcard') title = 'MyKad (2 Muka)';
-              else if (this.scanMode === 'license') title = 'Lesen (2 Muka)';
-              else if (this.scanMode === 'badge') title = 'Kad Staf/Pelajar';
-              this.openEditor(compositeUrl, title);
+              this.openEditor(compositeUrl, "Salinan Kad");
             });
           }
         }
       }
 
-      combineCardTwoSides(frontDataUrl, backDataUrl, callback) {
+      /**
+       * Menggabungkan Depan & Belakang Kad ke atas helaian A4 putih bersih.
+       * MENGGUNAKAN SAIZ SEBENAR KAD (Piawaian ISO/IEC 7810 ID-1: 85.60 mm x 53.98 mm)
+       * PERATURAN MUTLAK: BEBAS TEKS & BEBAS WATERMARK.
+       */
+      combineCardTwoSidesClean(frontDataUrl, backDataUrl, callback) {
         const imgFront = new Image();
         const imgBack = new Image();
 
         imgFront.onload = () => {
           imgBack.onload = () => {
+            // Cipta kanvas A4 pada resolusi cetakan 300 DPI (2480 x 3508 piksel)
+            // Nisbah mm ke piksel: 300 DPI / 25.4 mm = 11.81102 px/mm
             const a4Canvas = document.createElement('canvas');
-            a4Canvas.width = 1240;
-            a4Canvas.height = 1754;
+            a4Canvas.width = 2480;
+            a4Canvas.height = 3508;
             const ctx = a4Canvas.getContext('2d');
 
+            const pxPerMm = a4Canvas.width / 210; // ~11.8095 px setiap mm
+
+            // Latar belakang putih bersih
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, a4Canvas.width, a4Canvas.height);
 
-            ctx.fillStyle = "#1e293b";
-            ctx.font = "bold 26px sans-serif";
-            ctx.textAlign = "center";
-            let tajuk = "SALINAN KAD PENGENALAN (MYKAD)";
-            if (this.scanMode === 'license') tajuk = "SALINAN LESEN MEMANDU";
-            else if (this.scanMode === 'badge') tajuk = "SALINAN KAD JABATAN / PELAJAR";
-
-            ctx.fillText(tajuk, a4Canvas.width / 2, 90);
-
-            ctx.strokeStyle = "#cbd5e1";
-            ctx.lineWidth = 2;
-            ctx.beginPath();
-            ctx.moveTo(140, 115);
-            ctx.lineTo(a4Canvas.width - 140, 115);
-            ctx.stroke();
-
             if (this.scanMode === 'badge') {
-              const cardWidth = 475;
-              const cardHeight = 753;
-              const gap = 70;
-              const startX = (a4Canvas.width - (cardWidth * 2 + gap)) / 2;
-              const cardY = 320;
+              // KAD POTRET: Saiz sebenar 53.98 mm (lebar) x 85.60 mm (tinggi)
+              const cardW = Math.round(53.98 * pxPerMm);
+              const cardH = Math.round(85.60 * pxPerMm);
+              const gap = Math.round(24 * pxPerMm); // Jarak 24mm antara dua kad
+              const totalW = (cardW * 2) + gap;
 
-              const frontX = startX;
-              ctx.fillStyle = "#4338ca";
-              ctx.font = "bold 20px sans-serif";
-              ctx.textAlign = "center";
-              ctx.fillText("BAHAGIAN DEPAN", frontX + (cardWidth / 2), cardY - 18);
-              ctx.strokeStyle = "#94a3b8";
-              ctx.strokeRect(frontX - 1, cardY - 1, cardWidth + 2, cardHeight + 2);
-              ctx.drawImage(imgFront, frontX, cardY, cardWidth, cardHeight);
+              const startX = Math.round((a4Canvas.width - totalW) / 2);
+              const cardY = Math.round((a4Canvas.height - cardH) / 2);
 
-              const backX = startX + cardWidth + gap;
-              ctx.fillText("BAHAGIAN BELAKANG", backX + (cardWidth / 2), cardY - 18);
-              ctx.strokeRect(backX - 1, cardY - 1, cardWidth + 2, cardHeight + 2);
-              ctx.drawImage(imgBack, backX, cardY, cardWidth, cardHeight);
+              // Depan (kiri)
+              ctx.drawImage(imgFront, startX, cardY, cardW, cardH);
+              // Belakang (kanan)
+              ctx.drawImage(imgBack, startX + cardW + gap, cardY, cardW, cardH);
             } else {
-              const cardWidth = 720;
-              const cardHeight = 455;
-              const centerX = (a4Canvas.width - cardWidth) / 2;
+              // MYKAD & LESEN MEMANDU: Saiz sebenar 85.60 mm (lebar) x 53.98 mm (tinggi)
+              const cardW = Math.round(85.60 * pxPerMm);
+              const cardH = Math.round(53.98 * pxPerMm);
+              const centerX = Math.round((a4Canvas.width - cardW) / 2);
 
-              const frontY = 200;
-              ctx.fillStyle = "#047857";
-              ctx.font = "bold 20px sans-serif";
-              ctx.textAlign = "left";
-              ctx.fillText("BAHAGIAN DEPAN", centerX, frontY - 15);
-              ctx.strokeStyle = "#94a3b8";
-              ctx.strokeRect(centerX - 1, frontY - 1, cardWidth + 2, cardHeight + 2);
-              ctx.drawImage(imgFront, centerX, frontY, cardWidth, cardHeight);
+              // Susun atas dan bawah secara simetri pada bahagian tengah atas dokumen rasmi
+              const frontY = Math.round(75 * pxPerMm); // 75mm dari bahagian atas
+              const gap = Math.round(35 * pxPerMm);    // 35mm jarak antara bahagian depan & belakang
+              const backY = frontY + cardH + gap;
 
-              const backY = 760;
-              ctx.fillText("BAHAGIAN BELAKANG", centerX, backY - 15);
-              ctx.strokeRect(centerX - 1, backY - 1, cardWidth + 2, cardHeight + 2);
-              ctx.drawImage(imgBack, centerX, backY, cardWidth, cardHeight);
+              // Depan (atas)
+              ctx.drawImage(imgFront, centerX, frontY, cardW, cardH);
+              // Belakang (bawah)
+              ctx.drawImage(imgBack, centerX, backY, cardW, cardH);
             }
-
-            ctx.fillStyle = "#64748b";
-            ctx.font = "italic 16px sans-serif";
-            ctx.textAlign = "center";
-            const tarikhKini = new Date().toLocaleDateString('ms-MY', { day: 'numeric', month: 'long', year: 'numeric' });
-            ctx.fillText(`Diimbas secara digital pada ${tarikhKini} melalui ImbasDok Mobile`, a4Canvas.width / 2, 1650);
 
             callback(a4Canvas.toDataURL('image/jpeg', 0.95));
           };
@@ -673,28 +1006,40 @@
         imgFront.src = frontDataUrl;
       }
 
-      openEditor(imageUrl, titleText = "Sunting Imej") {
+      openEditor(imageUrl, titleText = "Laraskan Warna") {
         document.getElementById('editor-title').textContent = titleText;
         this.rotation = 0;
         this.activeFilter = 'natural';
         document.getElementById('slider-brightness').value = 0;
-        document.getElementById('slider-contrast').value = 5;
+        document.getElementById('slider-contrast').value = 4;
 
-        this.rawImage = new Image();
-        this.rawImage.onload = () => {
+        this.straightenedImage = new Image();
+        this.straightenedImage.onload = () => {
           this.switchView('editor');
           this.renderFilterPreview();
         };
-        this.rawImage.src = imageUrl;
+        this.straightenedImage.src = imageUrl;
+      }
+
+      backToCrop() {
+        this.haptic();
+        this.switchView('crop');
       }
 
       switchView(viewName) {
         document.getElementById('view-camera').classList.add('hidden');
+        document.getElementById('view-crop').classList.add('hidden');
         document.getElementById('view-editor').classList.add('hidden');
         document.getElementById('view-doc-list').classList.add('hidden');
 
         if (viewName === 'camera') {
           document.getElementById('view-camera').classList.remove('hidden');
+        } else if (viewName === 'crop') {
+          document.getElementById('view-crop').classList.remove('hidden');
+          setTimeout(() => {
+            this.updatePinPositions();
+            this.drawCropOverlay();
+          }, 60);
         } else if (viewName === 'editor') {
           document.getElementById('view-editor').classList.remove('hidden');
         } else if (viewName === 'doc-list') {
@@ -722,14 +1067,14 @@
         }
 
         if (filterType === 'natural') {
-          document.getElementById('slider-contrast').value = 6;
-          document.getElementById('slider-brightness').value = 2;
+          document.getElementById('slider-contrast').value = 4;
+          document.getElementById('slider-brightness').value = 0;
         } else if (filterType === 'clean') {
           document.getElementById('slider-contrast').value = 14;
           document.getElementById('slider-brightness').value = 10;
         } else if (filterType === 'bw') {
           document.getElementById('slider-contrast').value = 30;
-          document.getElementById('slider-brightness').value = 5;
+          document.getElementById('slider-brightness').value = 6;
         } else {
           document.getElementById('slider-contrast').value = 0;
           document.getElementById('slider-brightness').value = 0;
@@ -741,7 +1086,7 @@
       renderFilterPreview() {
         const canvas = document.getElementById('editor-canvas');
         const ctx = canvas.getContext('2d');
-        const img = this.rawImage;
+        const img = this.straightenedImage;
 
         const isSideways = this.rotation === 90 || this.rotation === 270;
         canvas.width = isSideways ? img.height : img.width;
@@ -775,6 +1120,7 @@
             const val = gray > threshold ? Math.min(255, gray * 1.15) : Math.max(0, gray * 0.7);
             r = g = b = val;
           } else if (this.activeFilter === 'natural') {
+            // Mengekalkan tona kulit dan teks asli
             r = Math.min(255, Math.max(0, factor * (r - 128) + 128 + brightness));
             g = Math.min(255, Math.max(0, factor * (g - 128) + 128 + brightness));
             b = Math.min(255, Math.max(0, factor * (b - 128) + 128 + brightness));
@@ -798,25 +1144,21 @@
         ctx.putImageData(imgData, 0, 0);
       }
 
-      cancelEditing() {
-        this.haptic();
-        this.switchView('camera');
-      }
-
       saveCurrentEdit() {
         this.haptic();
         const canvas = document.getElementById('editor-canvas');
-        const finalDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        const finalDataUrl = canvas.toDataURL('image/jpeg', 0.94);
         
         this.scannedPages.push({
           id: Date.now(),
           dataUrl: finalDataUrl,
           type: this.scanMode,
+          isA4Scale: this.scanMode !== 'document',
           date: new Date().toLocaleTimeString('ms-MY', { hour: '2-digit', minute: '2-digit' })
         });
 
         this.updateBadgeCount();
-        this.showToast("Muka surat disimpan!");
+        this.showToast("Halaman disimpan!");
         this.switchView('doc-list');
       }
 
@@ -827,13 +1169,12 @@
         const recentIcon = document.getElementById('recent-thumb-icon');
         const count = this.scannedPages.length;
 
-        topLabel.textContent = `${count} Dokumen`;
+        topLabel.textContent = `${count} Halaman`;
 
         if (count > 0) {
           badge.textContent = count;
           badge.classList.remove('hidden');
 
-          // Kemas kini thumbnail di sebelah butang kamera
           const lastPage = this.scannedPages[count - 1];
           recentImg.src = lastPage.dataUrl;
           recentImg.classList.remove('hidden');
@@ -854,12 +1195,11 @@
         this.switchView('doc-list');
       }
 
-      /* Paparkan Pratonton Skrin Penuh */
       viewFullPage(index) {
         this.haptic();
         const page = this.scannedPages[index];
         if (!page) return;
-        document.getElementById('full-preview-title').textContent = `Halaman #${index + 1} (${page.date})`;
+        document.getElementById('full-preview-title').textContent = `Halaman #${index + 1}`;
         document.getElementById('full-preview-img').src = page.dataUrl;
         document.getElementById('full-preview-modal').classList.remove('hidden');
         document.getElementById('full-preview-modal').classList.add('flex');
@@ -877,8 +1217,8 @@
         container.innerHTML = '';
 
         const count = this.scannedPages.length;
-        document.getElementById('pdf-page-count-text').textContent = `${count} Muka Surat Disimpan`;
-        document.getElementById('pdf-page-subtext').textContent = `${count} Muka Surat`;
+        document.getElementById('pdf-page-count-text').textContent = `${count} Halaman Disimpan`;
+        document.getElementById('pdf-page-subtext').textContent = `${count} Halaman`;
 
         if (count === 0) {
           container.innerHTML = `
@@ -887,7 +1227,7 @@
                 <i data-lucide="file-x" class="w-8 h-8 text-slate-600"></i>
               </div>
               <p class="text-xs font-semibold text-slate-400">Tiada halaman lagi</p>
-              <p class="text-[11px] text-slate-500 mt-1">Tekan 'Imbas Lagi' untuk memulakan</p>
+              <p class="text-[11px] text-slate-500 mt-1">Tekan 'Imbas Lagi' untuk mula mengimbas</p>
             </div>
           `;
           lucide.createIcons();
@@ -929,7 +1269,7 @@
         this.scannedPages.splice(index, 1);
         this.updateBadgeCount();
         this.renderScannedPagesGrid();
-        this.showToast("Muka surat dipadam.");
+        this.showToast("Halaman dipadam.");
       }
 
       clearAllPages() {
@@ -938,9 +1278,14 @@
         this.scannedPages = [];
         this.updateBadgeCount();
         this.renderScannedPagesGrid();
-        this.showToast("Semua dokumen telah dipadam.");
+        this.showToast("Semua halaman dipadam.");
       }
 
+      /**
+       * Menjana PDF A4 Bersih
+       * Untuk MyKad, Lesen & Kad Jabatan: Dicetak pada saiz sebenar 1:1 (85.60mm x 53.98mm).
+       * Tiada sebarang teks, tajuk, tarikh, atau watermark diletakkan.
+       */
       async generatePDF() {
         if (this.scannedPages.length === 0) {
           this.showToast("Sila imbas sekurang-kurangnya 1 halaman.", "error");
@@ -962,8 +1307,8 @@
             format: 'a4'
           });
 
-          const pageWidth = doc.internal.pageSize.getWidth();
-          const pageHeight = doc.internal.pageSize.getHeight();
+          const pageWidth = doc.internal.pageSize.getWidth();   // 210 mm
+          const pageHeight = doc.internal.pageSize.getHeight(); // 297 mm
 
           for (let i = 0; i < this.scannedPages.length; i++) {
             if (i > 0) {
@@ -975,19 +1320,27 @@
             await new Promise((resolve) => {
               const tempImg = new Image();
               tempImg.onload = () => {
-                const imgRatio = tempImg.width / tempImg.height;
-                let printWidth = pageWidth - 16;
-                let printHeight = printWidth / imgRatio;
+                if (page.isA4Scale || page.type !== 'document') {
+                  // Untuk Kad (MyKad, Lesen, Kad Jabatan):
+                  // Kanvas dijana pada nisbah A4 300 DPI dengan dimensi kad tepat 85.60mm x 53.98mm.
+                  // Dimuatkan tepat 210mm x 297mm (skala 100% 1:1) tanpa mengecilkan atau membesarkan.
+                  doc.addImage(page.dataUrl, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
+                } else {
+                  // Untuk Dokumen Biasa: Sesuaikan ke dalam mukasurat dengan margin kemas
+                  const imgRatio = tempImg.width / tempImg.height;
+                  let printWidth = pageWidth - 20;
+                  let printHeight = printWidth / imgRatio;
 
-                if (printHeight > pageHeight - 16) {
-                  printHeight = pageHeight - 16;
-                  printWidth = printHeight * imgRatio;
+                  if (printHeight > pageHeight - 20) {
+                    printHeight = pageHeight - 20;
+                    printWidth = printHeight * imgRatio;
+                  }
+
+                  const posX = (pageWidth - printWidth) / 2;
+                  const posY = (pageHeight - printHeight) / 2;
+
+                  doc.addImage(page.dataUrl, 'JPEG', posX, posY, printWidth, printHeight, undefined, 'FAST');
                 }
-
-                const posX = (pageWidth - printWidth) / 2;
-                const posY = (pageHeight - printHeight) / 2;
-
-                doc.addImage(page.dataUrl, 'JPEG', posX, posY, printWidth, printHeight, undefined, 'FAST');
                 resolve();
               };
               tempImg.src = page.dataUrl;
@@ -995,7 +1348,7 @@
           }
 
           const tarikhRingkas = new Date().toISOString().slice(0, 10);
-          const namaFail = `Imbasan_CamScanner_${tarikhRingkas}.pdf`;
+          const namaFail = `Dokumen_Imbasan_${tarikhRingkas}.pdf`;
           
           doc.save(namaFail);
           this.showToast(`Muat turun berjaya: ${namaFail}`);
