@@ -900,8 +900,19 @@
         let outW = Math.round(Math.max(topW, bottomW));
         let outH = Math.round(Math.max(leftH, rightH));
 
-        // Laraskan nisbah aspek mengikut saiz piawai kad ID-1 (85.60 mm x 53.98 mm = 1.58577)
-        if (this.scanMode === 'idcard' || this.scanMode === 'license') {
+        // Laraskan dimensi mengikut mod
+        if (this.scanMode === 'document') {
+          // NISBAH PIAWAI A4 (210mm x 297mm = 1:1.4142): Memastikan dokumen muat penuh pada A4
+          const a4Ratio = 297 / 210;
+          if (outH >= outW) {
+            outW = Math.max(outW, 1400);
+            outH = Math.round(outW * a4Ratio);
+          } else {
+            outH = Math.max(outH, 1400);
+            outW = Math.round(outH * a4Ratio);
+          }
+        } else if (this.scanMode === 'idcard' || this.scanMode === 'license') {
+          // Piawaian ISO/IEC 7810 ID-1 (85.60 mm x 53.98 mm)
           const targetRatio = 85.60 / 53.98;
           outW = Math.max(outW, 1000);
           outH = Math.round(outW / targetRatio);
@@ -912,7 +923,7 @@
         }
 
         // Hadkan saiz maksimum untuk kelajuan pemprosesan pantas di telefon
-        const maxDim = 1600;
+        const maxDim = 1800;
         if (outW > maxDim || outH > maxDim) {
           const ratio = Math.min(maxDim / outW, maxDim / outH);
           outW = Math.round(outW * ratio);
@@ -1196,64 +1207,106 @@
 
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const d = imgData.data;
-        const totalPixels = canvas.width * canvas.height;
+        const w = canvas.width;
+        const h = canvas.height;
+
+        // PENGESANAN LATAR ADAPTIF (ADAPTIVE PAPER ILLUMINATION ESTIMATOR)
+        // Membahagikan kanvas kepada grid untuk mengesan tahap kelabu kertas di bawah bayang lampu
+        const gridX = 16;
+        const gridY = 20;
+        const bgGrid = [];
+
+        const blockW = Math.ceil(w / gridX);
+        const blockH = Math.ceil(h / gridY);
+
+        for (let gy = 0; gy < gridY; gy++) {
+          bgGrid[gy] = [];
+          for (let gx = 0; gx < gridX; gx++) {
+            const startX = gx * blockW;
+            const startY = gy * blockH;
+            const endX = Math.min(w, startX + blockW);
+            const endY = Math.min(h, startY + blockH);
+
+            // Kumpul kecerahan sampel untuk mengesan warna latar kertas sebenar
+            const samples = [];
+            for (let sy = startY; sy < endY; sy += 4) {
+              for (let sx = startX; sx < endX; sx += 4) {
+                const idx = (sy * w + sx) * 4;
+                const lum = 0.299 * d[idx] + 0.587 * d[idx + 1] + 0.114 * d[idx + 2];
+                samples.push(lum);
+              }
+            }
+
+            if (samples.length > 0) {
+              samples.sort((a, b) => a - b);
+              // Ambil persentil ke-90 (mewakili permukaan kertas, mengabaikan teks gelap)
+              const p90 = samples[Math.floor(samples.length * 0.90)];
+              bgGrid[gy][gx] = Math.max(70, p90);
+            } else {
+              bgGrid[gy][gx] = 180;
+            }
+          }
+        }
 
         const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
 
-        // 1. Kira purata kecerahan latar belakang secara pantas
-        let sampleSum = 0;
-        const step = Math.max(1, Math.floor(totalPixels / 1000));
-        let samples = 0;
-        for (let i = 0; i < d.length; i += 4 * step) {
-          sampleSum += (0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
-          samples++;
-        }
-        const avgBackground = sampleSum / Math.max(1, samples);
+        // PROSES PEMUTIHAN & PEMBAIKAN WARNA KERTAS
+        for (let y = 0; y < h; y++) {
+          const gy = Math.min(gridY - 1, Math.floor(y / blockH));
+          for (let x = 0; x < w; x++) {
+            const gx = Math.min(gridX - 1, Math.floor(x / blockW));
+            const localPaperBg = bgGrid[gy][gx];
+            const i = (y * w + x) * 4;
 
-        // 2. Pemprosesan Piksel CamScanner Pintar
-        for (let i = 0; i < d.length; i += 4) {
-          let r = d[i];
-          let g = d[i + 1];
-          let b = d[i + 2];
+            let r = d[i];
+            let g = d[i + 1];
+            let b = d[i + 2];
 
-          const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
-          if (this.activeFilter === 'magic') {
-            // Formula CamScanner Magic Color:
-            // Latar kertas diputihkan dan teks digelapkan secara tajam
-            if (lum > avgBackground * 0.95) {
-              const boost = Math.min(255, lum * 1.18 + 12);
-              r = r * 0.35 + boost * 0.65;
-              g = g * 0.35 + boost * 0.65;
-              b = b * 0.35 + boost * 0.65;
-            } else {
-              // Pertajamkan tulisan teks dan perincian wajah
-              r = r * 0.88;
-              g = g * 0.88;
-              b = b * 0.88;
+            // Nisbah kecerahan berbanding bayang kertas di lokasi ini
+            const normRatio = 255 / localPaperBg;
+
+            if (this.activeFilter === 'magic' || this.activeFilter === 'clean') {
+              // Formula CamScanner Magic & Clean:
+              // Menghapuskan bayang kelabu bilik dan menyatukan kertas dengan latar putih 100% (#FFFFFF)
+              if (lum >= localPaperBg * 0.82) {
+                // Bahagian ini adalah kertas berkabut/kelabu: tingkatkan kepada putih tulen
+                const blend = Math.min(1, (lum - localPaperBg * 0.82) / (localPaperBg * 0.16));
+                r = r * normRatio * (1 - blend) + 255 * blend;
+                g = g * normRatio * (1 - blend) + 255 * blend;
+                b = b * normRatio * (1 - blend) + 255 * blend;
+              } else {
+                // Bahagian teks, logo dan tulisan tangan: pertajamkan dan legapkan
+                const darkFactor = this.activeFilter === 'clean' ? 0.78 : 0.85;
+                r = r * darkFactor;
+                g = g * darkFactor;
+                b = b * darkFactor;
+              }
+            } else if (this.activeFilter === 'bw') {
+              // Ambang hitam putih adaptif mengikut pencahayaan tempatan
+              const threshold = localPaperBg * 0.78;
+              const val = lum > threshold ? 255 : Math.max(0, lum * 0.35);
+              r = g = b = val;
+            } else if (this.activeFilter === 'natural') {
+              // Mod Semula Jadi: Lembutkan bayang kelabu tanpa menghilangkan warna asli kertas
+              if (lum >= localPaperBg * 0.88) {
+                const boost = Math.min(255, lum * normRatio);
+                r = Math.min(255, r * 0.4 + boost * 0.6);
+                g = Math.min(255, g * 0.4 + boost * 0.6);
+                b = Math.min(255, b * 0.4 + boost * 0.6);
+              }
             }
-          } else if (this.activeFilter === 'clean') {
-            // Latar belakang putih maksimum (kertas bersih)
-            if (lum > 140) {
-              r = Math.min(255, r * 1.25 + 20);
-              g = Math.min(255, g * 1.25 + 20);
-              b = Math.min(255, b * 1.25 + 20);
-            }
-          } else if (this.activeFilter === 'bw') {
-            // Hitam & Putih tajam dengan ambang dinamik
-            const threshold = Math.min(170, Math.max(120, avgBackground * 0.9));
-            const val = lum > threshold ? 255 : Math.max(0, lum * 0.45);
-            r = g = b = val;
+
+            // Pelarasan kecerahan & kontras mikro
+            r = Math.min(255, Math.max(0, contrastFactor * (r - 128) + 128 + brightness));
+            g = Math.min(255, Math.max(0, contrastFactor * (g - 128) + 128 + brightness));
+            b = Math.min(255, Math.max(0, contrastFactor * (b - 128) + 128 + brightness));
+
+            d[i] = r;
+            d[i + 1] = g;
+            d[i + 2] = b;
           }
-
-          // Laraskan kecerahan & kontras mikro
-          r = Math.min(255, Math.max(0, contrastFactor * (r - 128) + 128 + brightness));
-          g = Math.min(255, Math.max(0, contrastFactor * (g - 128) + 128 + brightness));
-          b = Math.min(255, Math.max(0, contrastFactor * (b - 128) + 128 + brightness));
-
-          d[i] = r;
-          d[i + 1] = g;
-          d[i + 2] = b;
         }
 
         ctx.putImageData(imgData, 0, 0);
@@ -1435,27 +1488,10 @@
             await new Promise((resolve) => {
               const tempImg = new Image();
               tempImg.onload = () => {
-                if (page.isA4Scale || page.type !== 'document') {
-                  // Untuk Kad (MyKad, Lesen, Kad Jabatan):
-                  // Kanvas dijana pada nisbah A4 300 DPI dengan dimensi kad tepat 85.60mm x 53.98mm.
-                  // Dimuatkan tepat 210mm x 297mm (skala 100% 1:1) tanpa mengecilkan atau membesarkan.
-                  doc.addImage(page.dataUrl, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
-                } else {
-                  // Untuk Dokumen Biasa: Sesuaikan ke dalam mukasurat dengan margin kemas
-                  const imgRatio = tempImg.width / tempImg.height;
-                  let printWidth = pageWidth - 20;
-                  let printHeight = printWidth / imgRatio;
-
-                  if (printHeight > pageHeight - 20) {
-                    printHeight = pageHeight - 20;
-                    printWidth = printHeight * imgRatio;
-                  }
-
-                  const posX = (pageWidth - printWidth) / 2;
-                  const posY = (pageHeight - printHeight) / 2;
-
-                  doc.addImage(page.dataUrl, 'JPEG', posX, posY, printWidth, printHeight, undefined, 'FAST');
-                }
+                // Untuk SEMUA DOKUMEN & KAD:
+                // Muat penuh saiz A4 (210 mm x 297 mm) tanpa sebarang jidar/border kosong
+                // Ini memastikan dokumen dan kad berpadu 100% seperti helaian A4 sebenar
+                doc.addImage(page.dataUrl, 'JPEG', 0, 0, pageWidth, pageHeight, undefined, 'FAST');
                 resolve();
               };
               tempImg.src = page.dataUrl;
