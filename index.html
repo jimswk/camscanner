@@ -2,7 +2,10 @@
 <html lang="ms">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="theme-color" content="#090d16">
   <title>Pengimbas Dokumen & Kad Pintar (Ala CamScanner)</title>
   
   <!-- Tailwind CSS CDN -->
@@ -13,287 +16,330 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 
   <style>
-    /* Halang pemilihan teks dan lantunan tatal pada telefon */
-    body {
+    /* Halang tatal berlebihan dan pemilihan teks */
+    html, body {
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
       -webkit-tap-highlight-color: transparent;
       user-select: none;
       touch-action: manipulation;
     }
+    /* Sokongan kawasan selamat notch & gesture bar */
+    .pt-safe { padding-top: max(env(safe-area-inset-top, 0px), 10px); }
+    .pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px); }
+
+    /* Sembunyikan scrollbar tetapi kekalkan kebolehan menatal */
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
     /* Animasi denyut panduan imbasan */
     @keyframes scanLine {
-      0% { top: 4%; opacity: 0.8; }
-      50% { top: 96%; opacity: 0.8; }
-      100% { top: 4%; opacity: 0.8; }
+      0% { top: 4%; opacity: 0.85; }
+      50% { top: 96%; opacity: 0.85; }
+      100% { top: 4%; opacity: 0.85; }
     }
     .scan-laser {
       position: absolute;
       left: 0;
       right: 0;
-      height: 2px;
+      height: 2.5px;
       background: linear-gradient(90deg, transparent, #10b981, #34d399, #10b981, transparent);
-      box-shadow: 0 0 10px #34d399;
-      animation: scanLine 2.6s ease-in-out infinite;
+      box-shadow: 0 0 12px #34d399;
+      animation: scanLine 2.5s ease-in-out infinite;
+    }
+
+    /* Animasi spring shutter button */
+    .shutter-btn:active .shutter-inner {
+      transform: scale(0.88);
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased selection:bg-emerald-500 selection:text-white">
+<body class="bg-slate-950 text-slate-100 flex items-center justify-center font-sans antialiased selection:bg-emerald-500 selection:text-white">
 
-  <!-- ================= NOTIFIKASI TOAST (PENGGANTI ALERT) ================= -->
-  <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 transform transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] bg-slate-800/95 border border-emerald-500/40 text-white px-5 py-3 rounded-2xl shadow-2xl backdrop-blur-md flex items-center gap-3 text-sm">
-    <i id="toast-icon" data-lucide="info" class="w-5 h-5 text-emerald-400 shrink-0"></i>
-    <span id="toast-message">Mesej pemberitahuan</span>
-  </div>
+  <!-- BEKAS APLIKASI TELEFON (Mobile Shell Container) -->
+  <div class="w-full max-w-md h-full flex flex-col bg-slate-950 shadow-2xl relative overflow-hidden border-x border-slate-900/60">
 
-  <!-- ================= BAR UTAMA ATAS ================= -->
-  <header class="bg-slate-900/90 border-b border-slate-800 px-4 py-3 sticky top-0 z-40 backdrop-blur-md flex items-center justify-between">
-    <div class="flex items-center gap-2.5">
-      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-900/30">
-        <i data-lucide="scan-line" class="w-5 h-5 text-white"></i>
-      </div>
-      <div>
-        <h1 class="font-bold text-base leading-tight tracking-tight text-white flex items-center gap-1.5">
-          ImbasDok <span class="text-[10px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded font-mono uppercase">Pro</span>
-        </h1>
-        <p class="text-[11px] text-slate-400">Pengimbas Kad & Dokumen PDF</p>
-      </div>
+    <!-- ================= NOTIFIKASI TOAST (PENGGANTI ALERT) ================= -->
+    <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 transform transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] bg-slate-900/95 border border-emerald-500/40 text-white px-4 py-2.5 rounded-full shadow-2xl backdrop-blur-lg flex items-center gap-2.5 text-xs font-medium max-w-[90%]">
+      <i id="toast-icon" data-lucide="info" class="w-4 h-4 text-emerald-400 shrink-0"></i>
+      <span id="toast-message" class="truncate">Mesej pemberitahuan</span>
     </div>
 
-    <!-- Butang Tindakan Kanan -->
-    <div class="flex items-center gap-2">
-      <button id="btn-gallery-list" onclick="app.showPageListModal()" class="relative p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 active:scale-95 transition-all">
-        <i data-lucide="files" class="w-5 h-5"></i>
-        <span id="badge-page-count" class="absolute -top-1 -right-1 bg-emerald-500 text-white text-[10px] font-bold rounded-full w-5 h-5 flex items-center justify-center border-2 border-slate-900 hidden">0</span>
+    <!-- ================= BAR UTAMA ATAS (HEADER NATIVE) ================= -->
+    <header class="bg-slate-900/80 border-b border-slate-800/80 px-4 pt-safe pb-2.5 sticky top-0 z-40 backdrop-blur-xl flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-950/50">
+          <i data-lucide="scan-line" class="w-4 h-4 text-slate-950 stroke-[2.5]"></i>
+        </div>
+        <div>
+          <h1 class="font-black text-sm tracking-tight text-white flex items-center gap-1.5">
+            ImbasDok <span class="text-[9px] bg-emerald-500/20 text-emerald-400 px-1.5 py-0.5 rounded-md font-mono uppercase tracking-wider">Mobile Pro</span>
+          </h1>
+        </div>
+      </div>
+
+      <!-- Butang Ke Galeri Halaman Atas -->
+      <button id="btn-gallery-list" onclick="app.showPageListModal()" class="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800/90 hover:bg-slate-800 border border-slate-700/60 text-slate-200 active:scale-95 transition-all">
+        <i data-lucide="folder-check" class="w-4 h-4 text-emerald-400"></i>
+        <span class="text-xs font-semibold" id="top-counter-label">0 Dokumen</span>
       </button>
-    </div>
-  </header>
+    </header>
 
-  <!-- ================= KANDUNGAN UTAMA (MOD-MOD VIEW) ================= -->
-  <main class="flex-1 flex flex-col relative overflow-hidden">
+    <!-- ================= KANDUNGAN UTAMA (VIEW MOD) ================= -->
+    <main class="flex-1 flex flex-col relative overflow-hidden">
 
-    <!-- 1. VIEW KAMERA & IMBASAN -->
-    <section id="view-camera" class="flex-1 flex flex-col relative bg-black">
-      
-      <!-- Pemilih Mod Imbasan (CamScanner Tabs) -->
-      <div class="bg-slate-900/80 backdrop-blur-sm border-b border-slate-800/80 px-2 py-2 flex items-center justify-start sm:justify-around gap-1.5 z-10 overflow-x-auto no-scrollbar">
-        <button onclick="app.setMode('document')" id="tab-mode-document" class="mode-tab shrink-0 active px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all bg-emerald-600 text-white shadow-sm">
-          <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
-          <span>Dokumen</span>
-        </button>
-        <button onclick="app.setMode('idcard')" id="tab-mode-idcard" class="mode-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
-          <i data-lucide="credit-card" class="w-3.5 h-3.5"></i>
-          <span>MyKad</span>
-        </button>
-        <button onclick="app.setMode('license')" id="tab-mode-license" class="mode-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
-          <i data-lucide="id-card" class="w-3.5 h-3.5"></i>
-          <span>Lesen Memandu</span>
-        </button>
-        <button onclick="app.setMode('badge')" id="tab-mode-badge" class="mode-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
-          <i data-lucide="contact" class="w-3.5 h-3.5"></i>
-          <span>Kad Staf / Pelajar (Potret)</span>
-        </button>
-      </div>
-
-      <!-- Panduan Muka Kad (Untuk MyKad & Lesen) -->
-      <div id="card-step-indicator" class="hidden absolute top-14 left-0 right-0 z-20 flex justify-center px-4">
-        <div class="bg-slate-900/90 border border-slate-700/80 backdrop-blur-md px-4 py-1.5 rounded-full shadow-lg flex items-center gap-3">
-          <span id="card-step-badge" class="w-5 h-5 rounded-full bg-emerald-500 text-slate-950 font-bold text-xs flex items-center justify-center">1</span>
-          <span id="card-step-text" class="text-xs font-semibold text-emerald-400">Sila imbas Bahagian DEPAN</span>
-        </div>
-      </div>
-
-      <!-- Viewport Kamera Sebenar -->
-      <div class="relative flex-1 flex items-center justify-center overflow-hidden">
-        <video id="camera-feed" autoplay playsinline muted class="w-full h-full object-cover"></video>
-
-        <!-- Garis Panduan / Overlay Berdasarkan Mod -->
-        <div id="guide-overlay" class="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
-          <div id="guide-frame" class="relative border-2 border-emerald-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-full max-w-sm aspect-[1/1.414]">
-            <!-- Sudut Penanda (Corner brackets) -->
-            <div class="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl"></div>
-            <div class="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-emerald-400 rounded-tr"></div>
-            <div class="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-emerald-400 rounded-bl"></div>
-            <div class="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-emerald-400 rounded-br"></div>
-            <!-- Laser animasi -->
-            <div class="scan-laser"></div>
-            <!-- Label Panduan -->
-            <span id="guide-label" class="absolute bottom-3 left-1/2 -translate-x-1/2 text-[11px] bg-slate-900/80 px-2.5 py-1 rounded text-slate-300 backdrop-blur-sm border border-slate-700 whitespace-nowrap">
-              Sejajarkan dokumen dalam bingkai
-            </span>
+      <!-- 1. VIEW KAMERA & IMBASAN -->
+      <section id="view-camera" class="flex-1 flex flex-col relative bg-black">
+        
+        <!-- Pemilih Mod Imbasan (Segmented Tabs ala Native App) -->
+        <div class="bg-slate-950/75 backdrop-blur-md px-3 py-2 z-10">
+          <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+            <button onclick="app.setMode('document')" id="tab-mode-document" class="mode-tab shrink-0 active px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all bg-emerald-600 text-white shadow-sm">
+              <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
+              <span>Dokumen</span>
+            </button>
+            <button onclick="app.setMode('idcard')" id="tab-mode-idcard" class="mode-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
+              <i data-lucide="credit-card" class="w-3.5 h-3.5"></i>
+              <span>MyKad</span>
+            </button>
+            <button onclick="app.setMode('license')" id="tab-mode-license" class="mode-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
+              <i data-lucide="id-card" class="w-3.5 h-3.5"></i>
+              <span>Lesen</span>
+            </button>
+            <button onclick="app.setMode('badge')" id="tab-mode-badge" class="mode-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white">
+              <i data-lucide="contact" class="w-3.5 h-3.5"></i>
+              <span>Kad Potret</span>
+            </button>
           </div>
         </div>
 
-        <!-- Mesej Kegagalan Kamera -->
-        <div id="camera-fallback" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 text-center z-10">
-          <div class="w-16 h-16 rounded-full bg-slate-800 flex items-center justify-center text-slate-400 mb-4">
-            <i data-lucide="camera-off" class="w-8 h-8"></i>
+        <!-- Panduan Muka Kad (Langkah 1 & 2) -->
+        <div id="card-step-indicator" class="hidden absolute top-14 left-0 right-0 z-20 flex justify-center px-4">
+          <div class="bg-slate-900/90 border border-emerald-500/30 backdrop-blur-md px-3.5 py-1 rounded-full shadow-lg flex items-center gap-2.5">
+            <span id="card-step-badge" class="w-4 h-4 rounded-full bg-emerald-500 text-slate-950 font-black text-[10px] flex items-center justify-center">1</span>
+            <span id="card-step-text" class="text-xs font-semibold text-emerald-400">Imbas Bahagian DEPAN</span>
           </div>
-          <h3 class="font-bold text-lg text-white mb-2">Kamera Tidak Dapat Diakses</h3>
-          <p class="text-sm text-slate-400 max-w-xs mb-6 leading-relaxed">
-            Sila benarkan akses kamera pelayar atau muat naik foto dokumen dari galeri telefon anda secara terus.
-          </p>
-          <label class="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-500 active:scale-95 text-white font-medium rounded-xl cursor-pointer flex items-center gap-2 shadow-lg shadow-emerald-950">
-            <i data-lucide="image-plus" class="w-4 h-4"></i>
-            <span>Pilih Dari Galeri</span>
-            <input type="file" accept="image/*" class="hidden" onchange="app.handleFileUpload(event)">
-          </label>
         </div>
-      </div>
 
-      <!-- Kawalan Bar Bawah (Butang Tangkap / Tukar Kamera / Galeri) -->
-      <div class="bg-slate-950/90 border-t border-slate-900 px-6 py-4 flex items-center justify-between z-20">
-        <!-- Input Fail / Galeri -->
-        <label class="p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 active:scale-95 cursor-pointer transition-all flex flex-col items-center gap-1">
-          <i data-lucide="image" class="w-5 h-5"></i>
-          <input type="file" accept="image/*" capture="environment" class="hidden" onchange="app.handleFileUpload(event)">
-          <span class="text-[10px] text-slate-400">Galeri</span>
-        </label>
+        <!-- Viewport Kamera Sebenar -->
+        <div class="relative flex-1 flex items-center justify-center overflow-hidden">
+          <video id="camera-feed" autoplay playsinline muted class="w-full h-full object-cover"></video>
 
-        <!-- Butang Shutter / Tangkap Gambar Utama -->
-        <button id="btn-capture" onclick="app.captureCurrentFrame()" class="relative group p-1 active:scale-90 transition-all duration-200">
-          <div class="w-18 h-18 w-[72px] h-[72px] rounded-full border-4 border-emerald-500/60 p-1 flex items-center justify-center">
-            <div class="w-full h-full bg-emerald-500 hover:bg-emerald-400 rounded-full shadow-lg shadow-emerald-600/40 flex items-center justify-center">
-              <i data-lucide="camera" class="w-7 h-7 text-slate-950"></i>
+          <!-- Garis Panduan / Overlay Berdasarkan Mod -->
+          <div id="guide-overlay" class="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
+            <div id="guide-frame" class="relative border-2 border-emerald-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-full max-w-xs aspect-[1/1.414]">
+              <!-- Sudut Penanda (Corner brackets) -->
+              <div class="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl"></div>
+              <div class="absolute -top-1 -right-1 w-6 h-6 border-t-4 border-r-4 border-emerald-400 rounded-tr"></div>
+              <div class="absolute -bottom-1 -left-1 w-6 h-6 border-b-4 border-l-4 border-emerald-400 rounded-bl"></div>
+              <div class="absolute -bottom-1 -right-1 w-6 h-6 border-b-4 border-r-4 border-emerald-400 rounded-br"></div>
+              <!-- Laser animasi -->
+              <div class="scan-laser"></div>
+              <!-- Label Panduan -->
+              <span id="guide-label" class="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] bg-slate-950/80 px-2.5 py-1 rounded-full text-slate-200 backdrop-blur-sm border border-slate-700/80 whitespace-nowrap shadow-md">
+                Sejajarkan dokumen dalam bingkai
+              </span>
             </div>
           </div>
-        </button>
 
-        <!-- Butang Balikkan Kamera (Belakang / Depan) -->
-        <button onclick="app.switchCamera()" class="p-3 rounded-2xl bg-slate-800/80 hover:bg-slate-800 text-slate-300 active:scale-95 transition-all flex flex-col items-center gap-1">
-          <i data-lucide="switch-camera" class="w-5 h-5"></i>
-          <span class="text-[10px] text-slate-400">Tukar</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- 2. VIEW EDITOR & PENAPIS (CAMSCANNER FILTERS) -->
-    <section id="view-editor" class="hidden flex-1 flex flex-col bg-slate-950">
-      
-      <!-- Bar Atas Editor -->
-      <div class="px-4 py-2.5 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-        <button onclick="app.cancelEditing()" class="p-2 rounded-xl text-slate-400 hover:text-white flex items-center gap-1 text-sm font-medium">
-          <i data-lucide="arrow-left" class="w-4 h-4"></i>
-          <span>Batal</span>
-        </button>
-        <span class="font-semibold text-sm text-slate-200" id="editor-title">Laraskan Imej</span>
-        <button onclick="app.saveCurrentEdit()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-semibold flex items-center gap-1 shadow-md">
-          <i data-lucide="check" class="w-3.5 h-3.5"></i>
-          <span>Simpan</span>
-        </button>
-      </div>
-
-      <!-- Kawasan Kanvas Pratonton Imej -->
-      <div class="flex-1 flex items-center justify-center p-4 overflow-hidden relative">
-        <div class="relative max-w-full max-h-full flex items-center justify-center shadow-2xl rounded-lg overflow-hidden border border-slate-800 bg-slate-900">
-          <canvas id="editor-canvas" class="max-w-full max-h-[55vh] object-contain"></canvas>
-        </div>
-      </div>
-
-      <!-- Pilihan Penapis CamScanner (Filter Presets) -->
-      <div class="bg-slate-900/90 border-t border-slate-800/80 p-3 flex flex-col gap-3">
-        <!-- Butang Penapis -->
-        <div class="grid grid-cols-4 gap-2">
-          <button onclick="app.applyPreset('magic')" id="preset-magic" class="preset-btn active p-2 rounded-xl bg-slate-800 border-2 border-emerald-500 flex flex-col items-center gap-1 text-center">
-            <i data-lucide="sparkles" class="w-4 h-4 text-emerald-400"></i>
-            <span class="text-[11px] font-medium text-white leading-tight">Warna Ajaib</span>
-          </button>
-          <button onclick="app.applyPreset('bw')" id="preset-bw" class="preset-btn p-2 rounded-xl bg-slate-800 border-2 border-transparent flex flex-col items-center gap-1 text-center">
-            <i data-lucide="file-minus" class="w-4 h-4 text-slate-300"></i>
-            <span class="text-[11px] font-medium text-white leading-tight">Hitam Putih</span>
-          </button>
-          <button onclick="app.applyPreset('gray')" id="preset-gray" class="preset-btn p-2 rounded-xl bg-slate-800 border-2 border-transparent flex flex-col items-center gap-1 text-center">
-            <i data-lucide="sun-medium" class="w-4 h-4 text-slate-300"></i>
-            <span class="text-[11px] font-medium text-white leading-tight">Kelabu</span>
-          </button>
-          <button onclick="app.applyPreset('original')" id="preset-original" class="preset-btn p-2 rounded-xl bg-slate-800 border-2 border-transparent flex flex-col items-center gap-1 text-center">
-            <i data-lucide="image" class="w-4 h-4 text-slate-300"></i>
-            <span class="text-[11px] font-medium text-white leading-tight">Asal</span>
-          </button>
-        </div>
-
-        <!-- Kawalan Putaran & Gelongsor Penalaan Halus -->
-        <div class="flex items-center justify-between gap-3 pt-1 border-t border-slate-800">
-          <button onclick="app.rotateImage()" class="px-3 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg text-xs font-medium flex items-center gap-1.5 active:scale-95">
-            <i data-lucide="rotate-cw" class="w-3.5 h-3.5"></i>
-            <span>Putar 90°</span>
-          </button>
-
-          <div class="flex-1 flex items-center gap-2">
-            <i data-lucide="sun" class="w-3.5 h-3.5 text-slate-400"></i>
-            <input type="range" id="slider-brightness" min="-50" max="50" value="0" oninput="app.renderFilterPreview()" class="w-full accent-emerald-500 h-1.5 bg-slate-700 rounded-lg">
-          </div>
-
-          <div class="flex-1 flex items-center gap-2">
-            <i data-lucide="contrast" class="w-3.5 h-3.5 text-slate-400"></i>
-            <input type="range" id="slider-contrast" min="-50" max="50" value="15" oninput="app.renderFilterPreview()" class="w-full accent-emerald-500 h-1.5 bg-slate-700 rounded-lg">
+          <!-- Fallback Jika Tiada Kamera -->
+          <div id="camera-fallback" class="hidden absolute inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 text-center z-10">
+            <div class="w-14 h-14 rounded-2xl bg-slate-900 border border-slate-800 flex items-center justify-center text-slate-400 mb-3 shadow-inner">
+              <i data-lucide="camera-off" class="w-7 h-7"></i>
+            </div>
+            <h3 class="font-bold text-base text-white mb-1">Akses Kamera Tidak Aktif</h3>
+            <p class="text-xs text-slate-400 max-w-xs mb-5 leading-relaxed">
+              Sila berikan kebenaran kamera atau pilih gambar dari galeri telefon pintar anda.
+            </p>
+            <label class="px-4 py-2.5 bg-emerald-600 active:scale-95 text-white font-medium rounded-xl cursor-pointer flex items-center gap-2 shadow-lg text-xs">
+              <i data-lucide="image-plus" class="w-4 h-4"></i>
+              <span>Pilih Dari Galeri</span>
+              <input type="file" accept="image/*" class="hidden" onchange="app.handleFileUpload(event)">
+            </label>
           </div>
         </div>
-      </div>
-    </section>
 
-    <!-- 3. VIEW DOKUMEN & EKSPORT PDF (SENARAI HALAMAN) -->
-    <section id="view-doc-list" class="hidden flex-1 flex flex-col bg-slate-950">
-      <div class="px-4 py-3 bg-slate-900 border-b border-slate-800 flex items-center justify-between">
-        <button onclick="app.switchView('camera')" class="p-2 rounded-xl text-slate-400 hover:text-white flex items-center gap-1 text-xs font-medium">
-          <i data-lucide="camera" class="w-4 h-4"></i>
-          <span>Imbas Lagi</span>
-        </button>
-        <span class="font-bold text-sm text-white">Pratonton Dokumen PDF</span>
-        <button onclick="app.clearAllPages()" class="p-2 text-rose-400 hover:text-rose-300 text-xs font-medium flex items-center gap-1">
-          <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
-          <span>Padam Semua</span>
-        </button>
-      </div>
+        <!-- Kawalan Bar Bawah Native (Shutter Dock) -->
+        <div class="bg-slate-950/95 border-t border-slate-900 px-6 pt-3 pb-safe flex items-center justify-between z-20">
+          <!-- Thumbnail Pratonton Terakhir / Buka Senarai -->
+          <div class="relative">
+            <button onclick="app.showPageListModal()" class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden active:scale-95 transition-all shadow-md">
+              <img id="recent-thumb-img" class="w-full h-full object-cover hidden" alt="Thumb">
+              <i id="recent-thumb-icon" data-lucide="layers" class="w-5 h-5 text-slate-400"></i>
+            </button>
+            <span id="badge-page-count" class="absolute -top-1 -right-1 bg-emerald-500 text-white text-[9px] font-black rounded-full w-4 h-4 flex items-center justify-center shadow hidden">0</span>
+          </div>
 
-      <!-- Grid Senarai Muka Surat -->
-      <div id="pages-container" class="flex-1 p-4 overflow-y-auto grid grid-cols-2 sm:grid-cols-3 gap-4 auto-rows-max">
-        <!-- Kad muka surat dimasukkan secara dinamik -->
-      </div>
+          <!-- Butang Tangkap Gambar Utama (Tactile Native Shutter) -->
+          <button id="btn-capture" onclick="app.captureCurrentFrame()" class="shutter-btn group p-1 active:scale-90 transition-all duration-150">
+            <div class="w-[68px] h-[68px] rounded-full border-[3px] border-emerald-400/80 p-1 flex items-center justify-center shadow-lg shadow-emerald-950/40">
+              <div class="shutter-inner w-full h-full bg-emerald-500 group-hover:bg-emerald-400 rounded-full flex items-center justify-center transition-transform">
+                <i data-lucide="camera" class="w-6 h-6 text-slate-950 stroke-[2.5]"></i>
+              </div>
+            </div>
+          </button>
 
-      <!-- Bar Tindakan Eksport PDF Bawah -->
-      <div class="p-4 bg-slate-900/95 border-t border-slate-800 backdrop-blur-md flex flex-col gap-3">
-        <div class="flex items-center justify-between text-xs text-slate-400 px-1">
-          <span id="pdf-page-count-text">0 Muka Surat Ditambah</span>
-          <span class="text-emerald-400 flex items-center gap-1">
-            <i data-lucide="shield-check" class="w-3.5 h-3.5"></i> Format Standard A4
-          </span>
+          <!-- Butang Balikkan Kamera & Muat Naik Galeri -->
+          <div class="flex items-center gap-1.5">
+            <label class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 active:scale-95 cursor-pointer flex items-center justify-center transition-all">
+              <i data-lucide="image" class="w-4 h-4"></i>
+              <input type="file" accept="image/*" class="hidden" onchange="app.handleFileUpload(event)">
+            </label>
+            <button onclick="app.switchCamera()" class="w-10 h-10 rounded-xl bg-slate-900 border border-slate-800 text-slate-300 active:scale-95 flex items-center justify-center transition-all">
+              <i data-lucide="switch-camera" class="w-4 h-4"></i>
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- 2. VIEW EDITOR & PENAPIS (CAMSCANNER FILTERS) -->
+      <section id="view-editor" class="hidden flex-1 flex flex-col bg-slate-950">
+        
+        <!-- Bar Atas Editor -->
+        <div class="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+          <button onclick="app.cancelEditing()" class="p-1.5 rounded-lg text-slate-400 hover:text-white flex items-center gap-1 text-xs font-medium active:scale-95">
+            <i data-lucide="chevron-left" class="w-4 h-4"></i>
+            <span>Batal</span>
+          </button>
+          <span class="font-bold text-xs text-slate-200" id="editor-title">Laraskan Imej</span>
+          <button onclick="app.saveCurrentEdit()" class="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold flex items-center gap-1 shadow active:scale-95">
+            <i data-lucide="check" class="w-3.5 h-3.5"></i>
+            <span>Simpan</span>
+          </button>
         </div>
 
-        <button onclick="app.generatePDF()" id="btn-download-pdf" class="w-full py-3.5 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 active:scale-[0.98] text-white font-bold rounded-2xl flex items-center justify-center gap-2 shadow-xl shadow-emerald-950 transition-all">
-          <i data-lucide="file-down" class="w-5 h-5"></i>
-          <span>Muat Turun PDF Sekarang</span>
+        <!-- Kawasan Kanvas Pratonton Imej -->
+        <div class="flex-1 flex items-center justify-center p-3 overflow-hidden relative bg-black/40">
+          <div class="relative max-w-full max-h-full flex items-center justify-center shadow-2xl rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50">
+            <canvas id="editor-canvas" class="max-w-full max-h-[50vh] object-contain"></canvas>
+          </div>
+        </div>
+
+        <!-- Pilihan Penapis & Pelaras Bawah Mobile -->
+        <div class="bg-slate-900/95 border-t border-slate-800 px-4 pt-3 pb-safe flex flex-col gap-3 backdrop-blur-xl">
+          <!-- Butang Penapis -->
+          <div class="grid grid-cols-4 gap-2">
+            <button onclick="app.applyPreset('natural')" id="preset-natural" class="preset-btn active p-2 rounded-xl bg-slate-800/90 border-2 border-emerald-500 flex flex-col items-center gap-1 text-center">
+              <i data-lucide="eye" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span class="text-[10px] font-semibold text-white">Semula Jadi</span>
+            </button>
+            <button onclick="app.applyPreset('original')" id="preset-original" class="preset-btn p-2 rounded-xl bg-slate-800/90 border-2 border-transparent flex flex-col items-center gap-1 text-center">
+              <i data-lucide="camera" class="w-3.5 h-3.5 text-slate-300"></i>
+              <span class="text-[10px] font-semibold text-white">Asal</span>
+            </button>
+            <button onclick="app.applyPreset('clean')" id="preset-clean" class="preset-btn p-2 rounded-xl bg-slate-800/90 border-2 border-transparent flex flex-col items-center gap-1 text-center">
+              <i data-lucide="sparkles" class="w-3.5 h-3.5 text-slate-300"></i>
+              <span class="text-[10px] font-semibold text-white">Jelas</span>
+            </button>
+            <button onclick="app.applyPreset('bw')" id="preset-bw" class="preset-btn p-2 rounded-xl bg-slate-800/90 border-2 border-transparent flex flex-col items-center gap-1 text-center">
+              <i data-lucide="file-minus" class="w-3.5 h-3.5 text-slate-300"></i>
+              <span class="text-[10px] font-semibold text-white">B&W</span>
+            </button>
+          </div>
+
+          <!-- Gelongsor & Putaran -->
+          <div class="flex items-center justify-between gap-3 pt-1 border-t border-slate-800/80">
+            <button onclick="app.rotateImage()" class="px-2.5 py-1.5 bg-slate-800 border border-slate-700 text-slate-200 rounded-lg text-[11px] font-medium flex items-center gap-1.5 active:scale-95">
+              <i data-lucide="rotate-cw" class="w-3.5 h-3.5 text-emerald-400"></i>
+              <span>Putar</span>
+            </button>
+
+            <div class="flex-1 flex items-center gap-1.5 bg-slate-800/60 px-2 py-1 rounded-lg">
+              <i data-lucide="sun" class="w-3 h-3 text-slate-400"></i>
+              <input type="range" id="slider-brightness" min="-40" max="40" value="0" oninput="app.renderFilterPreview()" class="w-full accent-emerald-500 h-1 bg-slate-700 rounded-lg">
+            </div>
+
+            <div class="flex-1 flex items-center gap-1.5 bg-slate-800/60 px-2 py-1 rounded-lg">
+              <i data-lucide="contrast" class="w-3 h-3 text-slate-400"></i>
+              <input type="range" id="slider-contrast" min="-40" max="40" value="5" oninput="app.renderFilterPreview()" class="w-full accent-emerald-500 h-1 bg-slate-700 rounded-lg">
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- 3. VIEW PAPARAN HALAMAN (NATIVE MOBILE PAGE GALLERY) -->
+      <section id="view-doc-list" class="hidden flex-1 flex flex-col bg-slate-950">
+        <!-- Bar Navigasi Galeri -->
+        <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+          <button onclick="app.switchView('camera')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 text-slate-200 text-xs font-semibold active:scale-95">
+            <i data-lucide="camera" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>Imbas Lagi</span>
+          </button>
+          
+          <div class="text-center">
+            <h2 class="font-bold text-xs text-white">Senarai Halaman</h2>
+            <p id="pdf-page-subtext" class="text-[10px] text-slate-400">0 Muka Surat</p>
+          </div>
+
+          <button onclick="app.clearAllPages()" class="p-2 text-rose-400 hover:text-rose-300 rounded-lg active:scale-95">
+            <i data-lucide="trash-2" class="w-4 h-4"></i>
+          </button>
+        </div>
+
+        <!-- Grid Halaman Dokumen Bergerak Lancar -->
+        <div id="pages-container" class="flex-1 p-3.5 overflow-y-auto no-scrollbar grid grid-cols-2 gap-3 auto-rows-max">
+          <!-- Kad muka surat dimasukkan secara dinamik -->
+        </div>
+
+        <!-- Tindakan Muat Turun Bawah Skrin -->
+        <div class="p-3.5 bg-slate-900/95 border-t border-slate-800/90 pb-safe flex flex-col gap-2.5 backdrop-blur-xl">
+          <div class="flex items-center justify-between text-[11px] text-slate-400 px-1 font-medium">
+            <span id="pdf-page-count-text">0 Muka Surat Disimpan</span>
+            <span class="text-emerald-400 flex items-center gap-1">
+              <i data-lucide="file-check" class="w-3.5 h-3.5"></i> Bersedia untuk PDF
+            </span>
+          </div>
+
+          <button onclick="app.generatePDF()" id="btn-download-pdf" class="w-full py-3 px-4 bg-gradient-to-r from-emerald-600 to-teal-500 hover:from-emerald-500 hover:to-teal-400 active:scale-[0.98] text-white font-bold text-sm rounded-2xl flex items-center justify-center gap-2 shadow-lg shadow-emerald-950/60 transition-all">
+            <i data-lucide="file-down" class="w-4 h-4"></i>
+            <span>Muat Turun Fail PDF</span>
+          </button>
+        </div>
+      </section>
+
+    </main>
+
+    <!-- ================= MODAL PRATONTON SKRIN PENUH ================= -->
+    <div id="full-preview-modal" class="fixed inset-0 z-50 bg-black/90 backdrop-blur-md hidden flex-col items-center justify-between p-4">
+      <div class="w-full flex items-center justify-between pt-safe">
+        <span id="full-preview-title" class="text-xs font-semibold text-slate-300">Pratonton Halaman</span>
+        <button onclick="app.closeFullPreview()" class="w-8 h-8 rounded-full bg-slate-800 text-white flex items-center justify-center active:scale-95">
+          <i data-lucide="x" class="w-4 h-4"></i>
         </button>
       </div>
-    </section>
+      <div class="flex-1 w-full flex items-center justify-center p-2">
+        <img id="full-preview-img" class="max-h-[75vh] max-w-full object-contain rounded-lg shadow-2xl" alt="Preview">
+      </div>
+      <div class="w-full pb-safe flex justify-center">
+        <button onclick="app.closeFullPreview()" class="px-6 py-2 bg-slate-800 text-slate-200 text-xs font-semibold rounded-full border border-slate-700">
+          Tutup
+        </button>
+      </div>
+    </div>
 
-  </main>
+  </div>
 
-  <!-- ================= SKRIP UTAMA APLIKASI ================= -->
+  <!-- ================= SKRIP LOGIK APLIKASI ================= -->
   <script>
     /**
-     * Aplikasi Pengimbas Dokumen Web & Kad Pintar (Ala CamScanner)
-     * Menggunakan Kanvas HTML5, getUserMedia, dan jsPDF
+     * Aplikasi Pengimbas Dokumen Web & Kad Pintar (Ala CamScanner Mobile)
      */
     class CamScannerApp {
       constructor() {
-        // Pembolehubah Kamera
         this.video = document.getElementById('camera-feed');
         this.stream = null;
-        this.currentFacingMode = "environment"; // Kamera belakang telefon
-        this.scanMode = "document"; // 'document' | 'idcard' | 'license'
+        this.currentFacingMode = "environment";
+        this.scanMode = "document";
 
-        // Data Sementara Kad Dua Muka
-        this.cardStep = 1; // 1: Depan, 2: Belakang
+        this.cardStep = 1;
         this.frontCardImage = null;
 
-        // Data Penyunting Imej
         this.rawImage = new Image();
-        this.activeFilter = 'magic'; // 'magic' | 'bw' | 'gray' | 'original'
-        this.rotation = 0; // 0, 90, 180, 270
+        this.activeFilter = 'natural';
+        this.rotation = 0;
 
-        // Senarai Semua Halaman Disimpan (Array of Base64 Data URL)
         this.scannedPages = [];
-
-        // Inisialisasi
         this.init();
       }
 
@@ -301,9 +347,16 @@
         lucide.createIcons();
         this.startCamera();
         this.updateModeUI();
+        this.updateBadgeCount();
       }
 
-      /* Tunjukkan mesej Toast */
+      /* Haptic maklum balas telefon bimbit */
+      haptic() {
+        if (navigator.vibrate) {
+          try { navigator.vibrate(18); } catch (e) {}
+        }
+      }
+
       showToast(message, type = 'info') {
         const toast = document.getElementById('toast');
         const text = document.getElementById('toast-message');
@@ -325,10 +378,9 @@
         setTimeout(() => {
           toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-[-20px]');
           toast.classList.remove('opacity-100', 'translate-y-0');
-        }, 3200);
+        }, 2800);
       }
 
-      /* Permulaan Kamera */
       async startCamera() {
         if (this.stream) {
           this.stream.getTracks().forEach(track => track.stop());
@@ -350,36 +402,34 @@
         } catch (err) {
           console.warn("Akses kamera gagal:", err);
           document.getElementById('camera-fallback').classList.remove('hidden');
-          this.showToast("Gagal menyambung ke kamera. Sila gunakan muat naik imej.", "error");
+          this.showToast("Kamera gagal diakses. Gunakan butang galeri.", "error");
         }
       }
 
-      /* Tukar Kamera Belakang/Depan */
       switchCamera() {
+        this.haptic();
         this.currentFacingMode = this.currentFacingMode === "environment" ? "user" : "environment";
         this.startCamera();
-        this.showToast(`Kamera ditukar ke: ${this.currentFacingMode === 'environment' ? 'Belakang' : 'Depan'}`);
+        this.showToast(`Kamera: ${this.currentFacingMode === 'environment' ? 'Belakang' : 'Depan'}`);
       }
 
-      /* Tetapkan Mod Imbasan (Dokumen, MyKad, Lesen) */
       setMode(mode) {
+        this.haptic();
         this.scanMode = mode;
         this.cardStep = 1;
         this.frontCardImage = null;
 
-        // Kemas kini tab aktif
         document.querySelectorAll('.mode-tab').forEach(tab => {
-          tab.className = "mode-tab px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white";
+          tab.className = "mode-tab shrink-0 px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all text-slate-400 hover:text-white";
         });
         const activeTab = document.getElementById(`tab-mode-${mode}`);
         if (activeTab) {
-          activeTab.className = "mode-tab active px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all bg-emerald-600 text-white shadow-sm";
+          activeTab.className = "mode-tab shrink-0 active px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all bg-emerald-600 text-white shadow-sm";
         }
 
         this.updateModeUI();
       }
 
-      /* Kemas kini Tampilan Bingkai Panduan Kamera */
       updateModeUI() {
         const frame = document.getElementById('guide-frame');
         const label = document.getElementById('guide-label');
@@ -389,116 +439,180 @@
 
         if (this.scanMode === 'document') {
           cardIndicator.classList.add('hidden');
-          frame.className = "relative border-2 border-emerald-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-full max-w-sm aspect-[1/1.414]";
+          frame.className = "relative border-2 border-emerald-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-full max-w-xs aspect-[1/1.414]";
           label.textContent = "Sejajarkan dokumen A4 dalam bingkai";
         } else if (this.scanMode === 'idcard') {
           cardIndicator.classList.remove('hidden');
-          frame.className = "relative border-2 border-blue-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-full max-w-xs aspect-[1.586/1]";
+          frame.className = "relative border-2 border-blue-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-full max-w-[270px] aspect-[1.586/1]";
           cardStepBadge.textContent = this.cardStep;
-          cardStepText.textContent = this.cardStep === 1 ? "Sila imbas Bahagian DEPAN MyKad" : "Sila imbas Bahagian BELAKANG MyKad";
-          label.textContent = "MyKad: Nisbah piawai kad pengenalan";
+          cardStepText.textContent = this.cardStep === 1 ? "Imbas Bahagian DEPAN MyKad" : "Imbas Bahagian BELAKANG MyKad";
+          label.textContent = "MyKad: Nisbah kad pengenalan";
         } else if (this.scanMode === 'license') {
           cardIndicator.classList.remove('hidden');
-          frame.className = "relative border-2 border-amber-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-full max-w-xs aspect-[1.586/1]";
+          frame.className = "relative border-2 border-amber-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-full max-w-[270px] aspect-[1.586/1]";
           cardStepBadge.textContent = this.cardStep;
-          cardStepText.textContent = this.cardStep === 1 ? "Sila imbas Bahagian DEPAN Lesen" : "Sila imbas Bahagian BELAKANG Lesen";
-          label.textContent = "Lesen Memandu: Sejajarkan dalam kad";
+          cardStepText.textContent = this.cardStep === 1 ? "Imbas Bahagian DEPAN Lesen" : "Imbas Bahagian BELAKANG Lesen";
+          label.textContent = "Lesen Memandu: Sejajarkan dalam bingkai";
         } else if (this.scanMode === 'badge') {
           cardIndicator.classList.remove('hidden');
-          frame.className = "relative border-2 border-indigo-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-56 sm:w-64 aspect-[1/1.586]";
+          frame.className = "relative border-2 border-indigo-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-48 aspect-[1/1.586]";
           cardStepBadge.textContent = this.cardStep;
-          cardStepText.textContent = this.cardStep === 1 ? "Sila imbas Bahagian DEPAN Kad Pelajar/Staf" : "Sila imbas Bahagian BELAKANG Kad Pelajar/Staf";
-          label.textContent = "Kad Potret (Menegak): Sejajarkan dalam bingkai";
+          cardStepText.textContent = this.cardStep === 1 ? "Imbas DEPAN Kad Pelajar/Staf" : "Imbas BELAKANG Kad Pelajar/Staf";
+          label.textContent = "Kad Potret (Menegak)";
         }
       }
 
-      /* Tangkap Bingkai Semasa Dari Kamera */
       captureCurrentFrame() {
-        const canvas = document.createElement('canvas');
+        this.haptic();
         const video = this.video;
+        const guideFrame = document.getElementById('guide-frame');
 
         if (!video.videoWidth || !video.videoHeight) {
           this.showToast("Kamera belum bersedia", "error");
           return;
         }
 
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const ctx = canvas.getContext('2d');
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        const vRect = video.getBoundingClientRect();
+        const gRect = guideFrame.getBoundingClientRect();
 
-        const capturedDataUrl = canvas.toDataURL('image/jpeg', 0.95);
-        this.processCapturedImage(capturedDataUrl);
+        const vw = video.videoWidth;
+        const vh = video.videoHeight;
+
+        const videoRatio = vw / vh;
+        const displayRatio = vRect.width / vRect.height;
+
+        let renderWidth, renderHeight, offsetX, offsetY;
+
+        if (displayRatio > videoRatio) {
+          renderWidth = vRect.width;
+          renderHeight = vRect.width / videoRatio;
+          offsetX = 0;
+          offsetY = (vRect.height - renderHeight) / 2;
+        } else {
+          renderHeight = vRect.height;
+          renderWidth = vRect.height * videoRatio;
+          offsetX = (vRect.width - renderWidth) / 2;
+          offsetY = 0;
+        }
+
+        const scale = vw / renderWidth;
+
+        let cropX = (gRect.left - vRect.left - offsetX) * scale;
+        let cropY = (gRect.top - vRect.top - offsetY) * scale;
+        let cropW = gRect.width * scale;
+        let cropH = gRect.height * scale;
+
+        cropX = Math.max(0, Math.min(vw - 10, cropX));
+        cropY = Math.max(0, Math.min(vh - 10, cropY));
+        cropW = Math.max(10, Math.min(vw - cropX, cropW));
+        cropH = Math.max(10, Math.min(vh - cropY, cropH));
+
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(cropW);
+        canvas.height = Math.round(cropH);
+        const ctx = canvas.getContext('2d');
+
+        ctx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+        this.processCapturedImage(canvas.toDataURL('image/jpeg', 0.95));
       }
 
-      /* Pengendali Muat Naik Fail Imej */
       handleFileUpload(e) {
         const file = e.target.files[0];
         if (!file) return;
 
         const reader = new FileReader();
         reader.onload = (event) => {
-          this.processCapturedImage(event.target.result);
+          this.processUploadedImage(event.target.result);
         };
         reader.readAsDataURL(file);
       }
 
-      /* Proses Imej Yang Ditangkap Berdasarkan Mod (MyKad 2 Muka vs Dokumen) */
+      processUploadedImage(dataUrl) {
+        const tempImg = new Image();
+        tempImg.onload = () => {
+          let targetRatio = null;
+          if (this.scanMode === 'idcard' || this.scanMode === 'license') {
+            targetRatio = 1.586;
+          } else if (this.scanMode === 'badge') {
+            targetRatio = 1 / 1.586;
+          }
+
+          if (targetRatio) {
+            const imgRatio = tempImg.width / tempImg.height;
+            let cropW, cropH, cropX, cropY;
+
+            if (imgRatio > targetRatio) {
+              cropH = tempImg.height;
+              cropW = cropH * targetRatio;
+              cropX = (tempImg.width - cropW) / 2;
+              cropY = 0;
+            } else {
+              cropW = tempImg.width;
+              cropH = cropW / targetRatio;
+              cropX = 0;
+              cropY = (tempImg.height - cropH) / 2;
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = Math.round(cropW);
+            canvas.height = Math.round(cropH);
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(tempImg, cropX, cropY, cropW, cropH, 0, 0, canvas.width, canvas.height);
+            this.processCapturedImage(canvas.toDataURL('image/jpeg', 0.95));
+          } else {
+            this.processCapturedImage(dataUrl);
+          }
+        };
+        tempImg.src = dataUrl;
+      }
+
       processCapturedImage(dataUrl) {
         if (this.scanMode === 'document') {
-          // Terus ke skrin suntingan
-          this.openEditor(dataUrl, "Suntingan Dokumen");
+          this.openEditor(dataUrl, "Dokumen A4");
         } else {
-          // Mod Kad Pengenalan / Lesen (2 Muka)
           if (this.cardStep === 1) {
             this.frontCardImage = dataUrl;
             this.cardStep = 2;
             this.updateModeUI();
-            this.showToast("Bahagian DEPAN berjaya ditangkap! Sila pusing kad untuk bahagian BELAKANG.");
+            this.showToast("DEPAN disimpan! Sila pusing kad ke BELAKANG.");
           } else {
-            // Gabungkan Bahagian Depan & Belakang ke atas 1 helaian format A4 rasmi
             this.combineCardTwoSides(this.frontCardImage, dataUrl, (compositeUrl) => {
               this.cardStep = 1;
               this.frontCardImage = null;
               this.updateModeUI();
-              let namaKad = 'Suntingan Kad';
-              if (this.scanMode === 'idcard') namaKad = 'MyKad (Depan & Belakang)';
-              else if (this.scanMode === 'license') namaKad = 'Lesen Memandu (2 Muka)';
-              else if (this.scanMode === 'badge') namaKad = 'Kad Pelajar/Staf Menegak (2 Muka)';
-              this.openEditor(compositeUrl, namaKad);
+              let title = 'Salinan Kad Pintar';
+              if (this.scanMode === 'idcard') title = 'MyKad (2 Muka)';
+              else if (this.scanMode === 'license') title = 'Lesen (2 Muka)';
+              else if (this.scanMode === 'badge') title = 'Kad Staf/Pelajar';
+              this.openEditor(compositeUrl, title);
             });
           }
         }
       }
 
-      /* Gabungkan 2 Imej Kad ke atas 1 Lembaran Saiz A4 (Standard Cetakan Bank/Rasmi) */
       combineCardTwoSides(frontDataUrl, backDataUrl, callback) {
         const imgFront = new Image();
         const imgBack = new Image();
 
         imgFront.onload = () => {
           imgBack.onload = () => {
-            // Cipta kanvas nisbah A4 (1240 x 1754 piksel untuk kualiti cetak tajam)
             const a4Canvas = document.createElement('canvas');
             a4Canvas.width = 1240;
             a4Canvas.height = 1754;
             const ctx = a4Canvas.getContext('2d');
 
-            // Latar belakang putih bersih
             ctx.fillStyle = "#ffffff";
             ctx.fillRect(0, 0, a4Canvas.width, a4Canvas.height);
 
-            // Garisan tajuk salinan
             ctx.fillStyle = "#1e293b";
             ctx.font = "bold 26px sans-serif";
             ctx.textAlign = "center";
             let tajuk = "SALINAN KAD PENGENALAN (MYKAD)";
             if (this.scanMode === 'license') tajuk = "SALINAN LESEN MEMANDU";
-            else if (this.scanMode === 'badge') tajuk = "SALINAN KAD PELAJAR / KAD JABATAN";
+            else if (this.scanMode === 'badge') tajuk = "SALINAN KAD JABATAN / PELAJAR";
 
             ctx.fillText(tajuk, a4Canvas.width / 2, 90);
 
-            // Garis pembahagi hiasan
             ctx.strokeStyle = "#cbd5e1";
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -507,76 +621,50 @@
             ctx.stroke();
 
             if (this.scanMode === 'badge') {
-              // ================= MOD KAD POTRET (MENEGAK) =================
-              // Susun Bersebelahan (Side-by-side) pada lembaran A4
               const cardWidth = 475;
-              const cardHeight = 753; // Nisbah menegak 1:1.586
+              const cardHeight = 753;
               const gap = 70;
               const startX = (a4Canvas.width - (cardWidth * 2 + gap)) / 2;
               const cardY = 320;
 
-              // 1. Kad Depan (Kiri)
               const frontX = startX;
-              ctx.fillStyle = "#4338ca"; // Indigo theme
-              ctx.font = "bold 20px sans-serif";
-              ctx.textAlign = "center";
-              ctx.fillText("BAHAGIAN DEPAN", frontX + (cardWidth / 2), cardY - 18);
-
-              ctx.strokeStyle = "#94a3b8";
-              ctx.lineWidth = 1.5;
-              ctx.strokeRect(frontX - 1, cardY - 1, cardWidth + 2, cardHeight + 2);
-              ctx.drawImage(imgFront, frontX, cardY, cardWidth, cardHeight);
-
-              // 2. Kad Belakang (Kanan)
-              const backX = startX + cardWidth + gap;
               ctx.fillStyle = "#4338ca";
               ctx.font = "bold 20px sans-serif";
               ctx.textAlign = "center";
-              ctx.fillText("BAHAGIAN BELAKANG", backX + (cardWidth / 2), cardY - 18);
-
+              ctx.fillText("BAHAGIAN DEPAN", frontX + (cardWidth / 2), cardY - 18);
               ctx.strokeStyle = "#94a3b8";
-              ctx.lineWidth = 1.5;
+              ctx.strokeRect(frontX - 1, cardY - 1, cardWidth + 2, cardHeight + 2);
+              ctx.drawImage(imgFront, frontX, cardY, cardWidth, cardHeight);
+
+              const backX = startX + cardWidth + gap;
+              ctx.fillText("BAHAGIAN BELAKANG", backX + (cardWidth / 2), cardY - 18);
               ctx.strokeRect(backX - 1, cardY - 1, cardWidth + 2, cardHeight + 2);
               ctx.drawImage(imgBack, backX, cardY, cardWidth, cardHeight);
-
             } else {
-              // ================= MOD KAD LANDSKAP (MYKAD & LESEN) =================
-              // Dimensi kad atas A4 secara menegak atas dan bawah
               const cardWidth = 720;
-              const cardHeight = 455; // Nisbah melintang 1.586:1
+              const cardHeight = 455;
               const centerX = (a4Canvas.width - cardWidth) / 2;
 
-              // 1. Lukis Kad Bahagian Depan
               const frontY = 200;
               ctx.fillStyle = "#047857";
               ctx.font = "bold 20px sans-serif";
               ctx.textAlign = "left";
               ctx.fillText("BAHAGIAN DEPAN", centerX, frontY - 15);
-
               ctx.strokeStyle = "#94a3b8";
-              ctx.lineWidth = 1.5;
               ctx.strokeRect(centerX - 1, frontY - 1, cardWidth + 2, cardHeight + 2);
               ctx.drawImage(imgFront, centerX, frontY, cardWidth, cardHeight);
 
-              // 2. Lukis Kad Bahagian Belakang
               const backY = 760;
-              ctx.fillStyle = "#047857";
-              ctx.font = "bold 20px sans-serif";
-              ctx.textAlign = "left";
               ctx.fillText("BAHAGIAN BELAKANG", centerX, backY - 15);
-
-              ctx.strokeStyle = "#94a3b8";
-              ctx.lineWidth = 1.5;
               ctx.strokeRect(centerX - 1, backY - 1, cardWidth + 2, cardHeight + 2);
               ctx.drawImage(imgBack, centerX, backY, cardWidth, cardHeight);
             }
 
-            // Nota Tarikh & Pengesahan Bawah Helaian A4
             ctx.fillStyle = "#64748b";
             ctx.font = "italic 16px sans-serif";
             ctx.textAlign = "center";
             const tarikhKini = new Date().toLocaleDateString('ms-MY', { day: 'numeric', month: 'long', year: 'numeric' });
-            ctx.fillText(`Diimbas secara digital pada ${tarikhKini} melalui ImbasDok Pintar`, a4Canvas.width / 2, 1650);
+            ctx.fillText(`Diimbas secara digital pada ${tarikhKini} melalui ImbasDok Mobile`, a4Canvas.width / 2, 1650);
 
             callback(a4Canvas.toDataURL('image/jpeg', 0.95));
           };
@@ -585,13 +673,12 @@
         imgFront.src = frontDataUrl;
       }
 
-      /* Buka Skrin Suntingan Imej & Penapis */
       openEditor(imageUrl, titleText = "Sunting Imej") {
         document.getElementById('editor-title').textContent = titleText;
         this.rotation = 0;
-        this.activeFilter = 'magic';
+        this.activeFilter = 'natural';
         document.getElementById('slider-brightness').value = 0;
-        document.getElementById('slider-contrast').value = 15;
+        document.getElementById('slider-contrast').value = 5;
 
         this.rawImage = new Image();
         this.rawImage.onload = () => {
@@ -601,7 +688,6 @@
         this.rawImage.src = imageUrl;
       }
 
-      /* Tukar Tetingkap Paparan */
       switchView(viewName) {
         document.getElementById('view-camera').classList.add('hidden');
         document.getElementById('view-editor').classList.add('hidden');
@@ -618,30 +704,32 @@
         lucide.createIcons();
       }
 
-      /* Putar Imej 90 Darjah */
       rotateImage() {
+        this.haptic();
         this.rotation = (this.rotation + 90) % 360;
         this.renderFilterPreview();
       }
 
-      /* Pilih Penapis CamScanner */
       applyPreset(filterType) {
+        this.haptic();
         this.activeFilter = filterType;
         document.querySelectorAll('.preset-btn').forEach(btn => {
-          btn.className = "preset-btn p-2 rounded-xl bg-slate-800 border-2 border-transparent flex flex-col items-center gap-1 text-center";
+          btn.className = "preset-btn p-2 rounded-xl bg-slate-800/90 border-2 border-transparent flex flex-col items-center gap-1 text-center";
         });
         const activeBtn = document.getElementById(`preset-${filterType}`);
         if (activeBtn) {
-          activeBtn.className = "preset-btn active p-2 rounded-xl bg-slate-800 border-2 border-emerald-500 flex flex-col items-center gap-1 text-center";
+          activeBtn.className = "preset-btn active p-2 rounded-xl bg-slate-800/90 border-2 border-emerald-500 flex flex-col items-center gap-1 text-center";
         }
 
-        // Nilai kecerahan lalai mengikut mod
-        if (filterType === 'magic') {
-          document.getElementById('slider-contrast').value = 25;
+        if (filterType === 'natural') {
+          document.getElementById('slider-contrast').value = 6;
+          document.getElementById('slider-brightness').value = 2;
+        } else if (filterType === 'clean') {
+          document.getElementById('slider-contrast').value = 14;
           document.getElementById('slider-brightness').value = 10;
         } else if (filterType === 'bw') {
-          document.getElementById('slider-contrast').value = 40;
-          document.getElementById('slider-brightness').value = 15;
+          document.getElementById('slider-contrast').value = 30;
+          document.getElementById('slider-brightness').value = 5;
         } else {
           document.getElementById('slider-contrast').value = 0;
           document.getElementById('slider-brightness').value = 0;
@@ -650,13 +738,11 @@
         this.renderFilterPreview();
       }
 
-      /* Rendering Penapis Ke Kanvas */
       renderFilterPreview() {
         const canvas = document.getElementById('editor-canvas');
         const ctx = canvas.getContext('2d');
         const img = this.rawImage;
 
-        // Ambil kiraan putaran 90 / 270 darjah
         const isSideways = this.rotation === 90 || this.rotation === 270;
         canvas.width = isSideways ? img.height : img.width;
         canvas.height = isSideways ? img.width : img.height;
@@ -667,70 +753,58 @@
         ctx.drawImage(img, -img.width / 2, -img.height / 2);
         ctx.restore();
 
-        // Pemprosesan Piksel CamScanner
         const brightness = parseInt(document.getElementById('slider-brightness').value, 10);
         const contrast = parseInt(document.getElementById('slider-contrast').value, 10);
 
         if (this.activeFilter === 'original' && brightness === 0 && contrast === 0) {
-          return; // Tiada penapis diperlukan
+          return;
         }
 
         const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         const d = imgData.data;
-        const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
+        const factor = (259 * (contrast + 255)) / (255 * (259 - contrast));
 
         for (let i = 0; i < d.length; i += 4) {
           let r = d[i];
           let g = d[i + 1];
           let b = d[i + 2];
 
-          // 1. Skala Kelabu / Grayscale Luminescence
-          const gray = 0.299 * r + 0.587 * g + 0.114 * b;
-
-          if (this.activeFilter === 'gray') {
-            r = g = b = gray;
-          } else if (this.activeFilter === 'bw') {
-            // Ambang hitam putih dokumen (High-contrast B&W document thresholding)
-            const threshold = 135;
-            const val = gray > threshold ? 255 : (gray * 0.4);
+          if (this.activeFilter === 'bw') {
+            const gray = 0.299 * r + 0.587 * g + 0.114 * b;
+            const threshold = 138;
+            const val = gray > threshold ? Math.min(255, gray * 1.15) : Math.max(0, gray * 0.7);
             r = g = b = val;
-          } else if (this.activeFilter === 'magic') {
-            // Magic Color: Tingkatkan kejelasan dokumen sambil kekalkan warna asal
-            // Menjadikan latar belakang cerah putih dan tulisan gelap
-            const highPop = Math.min(255, (r * 0.4 + g * 0.4 + b * 0.2) * 1.15);
-            if (highPop > 190) {
-              // Latar belakang diputihkan secara pintar
-              r = Math.min(255, r * 1.25);
-              g = Math.min(255, g * 1.25);
-              b = Math.min(255, b * 1.25);
-            } else {
-              // Teks digelapkan untuk ketajaman
-              r = r * 0.85;
-              g = g * 0.85;
-              b = b * 0.85;
+          } else if (this.activeFilter === 'natural') {
+            r = Math.min(255, Math.max(0, factor * (r - 128) + 128 + brightness));
+            g = Math.min(255, Math.max(0, factor * (g - 128) + 128 + brightness));
+            b = Math.min(255, Math.max(0, factor * (b - 128) + 128 + brightness));
+          } else if (this.activeFilter === 'clean') {
+            const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            if (lum > 165) {
+              r = Math.min(255, r * 1.05 + 6);
+              g = Math.min(255, g * 1.05 + 6);
+              b = Math.min(255, b * 1.05 + 6);
             }
+            r = Math.min(255, Math.max(0, factor * (r - 128) + 128 + brightness));
+            g = Math.min(255, Math.max(0, factor * (g - 128) + 128 + brightness));
+            b = Math.min(255, Math.max(0, factor * (b - 128) + 128 + brightness));
           }
 
-          // 2. Aplikasi Kecerahan & Kontras
-          r = contrastFactor * (r - 128) + 128 + brightness;
-          g = contrastFactor * (g - 128) + 128 + brightness;
-          b = contrastFactor * (b - 128) + 128 + brightness;
-
-          d[i] = Math.max(0, Math.min(255, r));
-          d[i + 1] = Math.max(0, Math.min(255, g));
-          d[i + 2] = Math.max(0, Math.min(255, b));
+          d[i] = r;
+          d[i + 1] = g;
+          d[i + 2] = b;
         }
 
         ctx.putImageData(imgData, 0, 0);
       }
 
-      /* Batal Suntingan */
       cancelEditing() {
+        this.haptic();
         this.switchView('camera');
       }
 
-      /* Simpan Hasil Suntingan Semasa Ke Senarai Dokumen */
       saveCurrentEdit() {
+        this.haptic();
         const canvas = document.getElementById('editor-canvas');
         const finalDataUrl = canvas.toDataURL('image/jpeg', 0.92);
         
@@ -742,24 +816,37 @@
         });
 
         this.updateBadgeCount();
-        this.showToast("Muka surat berjaya disimpan!");
+        this.showToast("Muka surat disimpan!");
         this.switchView('doc-list');
       }
 
-      /* Kemas kini Lencana Bilangan Dokumen */
       updateBadgeCount() {
         const badge = document.getElementById('badge-page-count');
+        const topLabel = document.getElementById('top-counter-label');
+        const recentImg = document.getElementById('recent-thumb-img');
+        const recentIcon = document.getElementById('recent-thumb-icon');
         const count = this.scannedPages.length;
+
+        topLabel.textContent = `${count} Dokumen`;
+
         if (count > 0) {
           badge.textContent = count;
           badge.classList.remove('hidden');
+
+          // Kemas kini thumbnail di sebelah butang kamera
+          const lastPage = this.scannedPages[count - 1];
+          recentImg.src = lastPage.dataUrl;
+          recentImg.classList.remove('hidden');
+          recentIcon.classList.add('hidden');
         } else {
           badge.classList.add('hidden');
+          recentImg.classList.add('hidden');
+          recentIcon.classList.remove('hidden');
         }
       }
 
-      /* Paparkan Modal Senarai Halaman */
       showPageListModal() {
+        this.haptic();
         if (this.scannedPages.length === 0) {
           this.showToast("Belum ada dokumen yang diimbas.");
           return;
@@ -767,18 +854,40 @@
         this.switchView('doc-list');
       }
 
-      /* Render Grid Muka Surat Yang Disimpan */
+      /* Paparkan Pratonton Skrin Penuh */
+      viewFullPage(index) {
+        this.haptic();
+        const page = this.scannedPages[index];
+        if (!page) return;
+        document.getElementById('full-preview-title').textContent = `Halaman #${index + 1} (${page.date})`;
+        document.getElementById('full-preview-img').src = page.dataUrl;
+        document.getElementById('full-preview-modal').classList.remove('hidden');
+        document.getElementById('full-preview-modal').classList.add('flex');
+        lucide.createIcons();
+      }
+
+      closeFullPreview() {
+        this.haptic();
+        document.getElementById('full-preview-modal').classList.add('hidden');
+        document.getElementById('full-preview-modal').classList.remove('flex');
+      }
+
       renderScannedPagesGrid() {
         const container = document.getElementById('pages-container');
         container.innerHTML = '';
 
-        document.getElementById('pdf-page-count-text').textContent = `${this.scannedPages.length} Muka Surat Ditambah`;
+        const count = this.scannedPages.length;
+        document.getElementById('pdf-page-count-text').textContent = `${count} Muka Surat Disimpan`;
+        document.getElementById('pdf-page-subtext').textContent = `${count} Muka Surat`;
 
-        if (this.scannedPages.length === 0) {
+        if (count === 0) {
           container.innerHTML = `
-            <div class="col-span-full py-16 flex flex-col items-center justify-center text-slate-500">
-              <i data-lucide="file-x-2" class="w-12 h-12 mb-2 stroke-1"></i>
-              <p class="text-sm">Tiada halaman. Sila imbas dokumen terlebih dahulu.</p>
+            <div class="col-span-full py-20 flex flex-col items-center justify-center text-slate-500 text-center">
+              <div class="w-16 h-16 rounded-full bg-slate-900 flex items-center justify-center mb-3">
+                <i data-lucide="file-x" class="w-8 h-8 text-slate-600"></i>
+              </div>
+              <p class="text-xs font-semibold text-slate-400">Tiada halaman lagi</p>
+              <p class="text-[11px] text-slate-500 mt-1">Tekan 'Imbas Lagi' untuk memulakan</p>
             </div>
           `;
           lucide.createIcons();
@@ -787,18 +896,24 @@
 
         this.scannedPages.forEach((page, index) => {
           const card = document.createElement('div');
-          card.className = "bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col shadow-lg relative group";
+          card.className = "bg-slate-900 border border-slate-800 rounded-2xl overflow-hidden flex flex-col shadow-lg relative group active:scale-[0.98] transition-all";
 
           card.innerHTML = `
-            <div class="aspect-[1/1.4] bg-slate-950 relative overflow-hidden flex items-center justify-center">
-              <img src="${page.dataUrl}" class="w-full h-full object-contain" alt="Halaman ${index + 1}">
-              <span class="absolute top-2 left-2 bg-slate-900/90 text-emerald-400 font-bold text-[10px] px-2 py-0.5 rounded-md border border-slate-700">
+            <div onclick="app.viewFullPage(${index})" class="aspect-[1/1.3] bg-slate-950/80 relative overflow-hidden flex items-center justify-center cursor-pointer p-1">
+              <img src="${page.dataUrl}" class="w-full h-full object-contain rounded-lg shadow" alt="Halaman ${index + 1}">
+              <span class="absolute top-2 left-2 bg-slate-900/90 text-emerald-400 font-black text-[9px] px-2 py-0.5 rounded-full border border-slate-700/80 shadow">
                 #${index + 1}
               </span>
+              <div class="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                <span class="p-1.5 bg-slate-900/90 rounded-full text-white text-xs shadow"><i data-lucide="zoom-in" class="w-3.5 h-3.5"></i></span>
+              </div>
             </div>
-            <div class="p-2.5 flex items-center justify-between bg-slate-900/90 border-t border-slate-800">
-              <span class="text-[11px] text-slate-400 truncate max-w-[70px]">Muka ${index + 1}</span>
-              <button onclick="app.deletePage(${index})" class="p-1.5 text-rose-400 hover:bg-rose-500/20 rounded-lg transition-colors">
+            <div class="px-2.5 py-2 flex items-center justify-between bg-slate-900/95 border-t border-slate-800/80">
+              <div>
+                <p class="text-[11px] font-bold text-slate-200">Muka ${index + 1}</p>
+                <p class="text-[9px] text-slate-400 font-mono">${page.date}</p>
+              </div>
+              <button onclick="event.stopPropagation(); app.deletePage(${index})" class="p-1.5 text-rose-400 hover:bg-rose-500/20 active:scale-90 rounded-lg transition-colors">
                 <i data-lucide="trash" class="w-3.5 h-3.5"></i>
               </button>
             </div>
@@ -809,39 +924,38 @@
         lucide.createIcons();
       }
 
-      /* Padam Suatu Muka Surat */
       deletePage(index) {
+        this.haptic();
         this.scannedPages.splice(index, 1);
         this.updateBadgeCount();
         this.renderScannedPagesGrid();
         this.showToast("Muka surat dipadam.");
       }
 
-      /* Padam Semua */
       clearAllPages() {
         if (this.scannedPages.length === 0) return;
+        this.haptic();
         this.scannedPages = [];
         this.updateBadgeCount();
         this.renderScannedPagesGrid();
         this.showToast("Semua dokumen telah dipadam.");
       }
 
-      /* Jana & Muat Turun Fail PDF Berformat A4 */
       async generatePDF() {
         if (this.scannedPages.length === 0) {
           this.showToast("Sila imbas sekurang-kurangnya 1 halaman.", "error");
           return;
         }
 
+        this.haptic();
         const btn = document.getElementById('btn-download-pdf');
         const originalContent = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML = `<i data-lucide="loader-2" class="w-5 h-5 animate-spin"></i><span>Menjana PDF...</span>`;
+        btn.innerHTML = `<i data-lucide="loader-2" class="w-4 h-4 animate-spin"></i><span>Menjana PDF...</span>`;
         lucide.createIcons();
 
         try {
           const { jsPDF } = window.jspdf;
-          // Format standard A4: 210mm x 297mm
           const doc = new jsPDF({
             orientation: 'portrait',
             unit: 'mm',
@@ -858,15 +972,13 @@
 
             const page = this.scannedPages[i];
             
-            // Muat saiz imej sebenar
             await new Promise((resolve) => {
               const tempImg = new Image();
               tempImg.onload = () => {
                 const imgRatio = tempImg.width / tempImg.height;
-                let printWidth = pageWidth - 16; // 8mm margin kiri dan kanan
+                let printWidth = pageWidth - 16;
                 let printHeight = printWidth / imgRatio;
 
-                // Jika melebihi tinggi muka surat, sesuaikan
                 if (printHeight > pageHeight - 16) {
                   printHeight = pageHeight - 16;
                   printWidth = printHeight * imgRatio;
@@ -882,15 +994,14 @@
             });
           }
 
-          // Nama fail automatik mengikut tarikh
           const tarikhRingkas = new Date().toISOString().slice(0, 10);
-          const namaFail = `Imbasan_Dokumen_${tarikhRingkas}.pdf`;
+          const namaFail = `Imbasan_CamScanner_${tarikhRingkas}.pdf`;
           
           doc.save(namaFail);
-          this.showToast(`Berjaya dimuat turun: ${namaFail}`);
+          this.showToast(`Muat turun berjaya: ${namaFail}`);
         } catch (error) {
           console.error("Ralat PDF:", error);
-          this.showToast("Gagal menjana PDF. Sila cuba lagi.", "error");
+          this.showToast("Gagal menjana PDF.", "error");
         } finally {
           btn.disabled = false;
           btn.innerHTML = originalContent;
@@ -899,7 +1010,6 @@
       }
     }
 
-    // Jalankan aplikasi selepas DOM sedia
     let app;
     window.addEventListener('DOMContentLoaded', () => {
       app = new CamScannerApp();
