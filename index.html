@@ -261,9 +261,13 @@
             <i data-lucide="maximize" class="w-3.5 h-3.5 text-slate-400"></i>
             <span>Penuh</span>
           </button>
-          <button onclick="app.autoDetectCorners()" class="px-3.5 py-1.5 bg-emerald-600/20 border border-emerald-500/60 rounded-lg text-xs font-bold text-emerald-300 active:scale-95 flex items-center gap-1.5">
-            <i data-lucide="scan" class="w-3.5 h-3.5 text-emerald-400 animate-pulse"></i>
-            <span>Kesan Bucu Auto</span>
+          <button onclick="app.autoDetectCorners()" class="px-3 py-1.5 bg-emerald-600/20 border border-emerald-500/60 rounded-lg text-xs font-bold text-emerald-300 active:scale-95 flex items-center gap-1.5">
+            <i data-lucide="scan" class="w-3.5 h-3.5 text-emerald-400"></i>
+            <span>Kesan Bucu</span>
+          </button>
+          <button onclick="app.insetCorners()" class="px-3 py-1.5 bg-slate-800 border border-slate-700/80 rounded-lg text-xs font-semibold text-amber-300 active:scale-95 flex items-center gap-1.5" title="Kikis sisa meja di tepi kertas">
+            <i data-lucide="minimize-2" class="w-3.5 h-3.5 text-amber-400"></i>
+            <span>Kikis Tepi</span>
           </button>
           <button onclick="app.confirmCrop()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold active:scale-95 flex items-center gap-1.5 shadow">
             <i data-lucide="sparkles" class="w-3.5 h-3.5"></i>
@@ -689,6 +693,8 @@
           // Pastikan poligon sah
           if (tr.x > tl.x + w * 0.25 && br.y > tr.y + h * 0.25) {
             this.corners = [tl, tr, br, bl];
+            // Kikis sedikit ke dalam (1.2%) supaya tepi meja tidak termasuk
+            this.insetCorners(0.012);
           } else {
             this.resetCropCorners(0.08);
           }
@@ -699,6 +705,28 @@
 
         this.updatePinPositions();
         this.drawCropOverlay();
+      }
+
+      /**
+       * Mengikis bucu masuk sedikit ke dalam (Micro-Inset):
+       * Memastikan sisa meja, bayang tepi kertas atau latar belakang
+       * tidak termasuk ke dalam hasil imbasan.
+       */
+      insetCorners(factor = 0.015) {
+        this.haptic();
+        const [c0, c1, c2, c3] = this.corners;
+        // Pusat poligon
+        const centerX = (c0.x + c1.x + c2.x + c3.x) / 4;
+        const centerY = (c0.y + c1.y + c2.y + c3.y) / 4;
+
+        this.corners = this.corners.map(p => ({
+          x: p.x + (centerX - p.x) * factor,
+          y: p.y + (centerY - p.y) * factor
+        }));
+
+        this.updatePinPositions();
+        this.drawCropOverlay();
+        this.showToast("Tepi dikikis ke dalam kertas.");
       }
 
       resetCropCorners(margin = 0.08) {
@@ -991,23 +1019,45 @@
           f = p0.y;
         }
 
-        // Pemetaan songsang piksel ke piksel dengan interpolasi
+        // Interpolasi Dwilinear (Bilinear Interpolation):
+        // Memastikan teks dan garisan jadual tajam dan tidak bergerigi (anti-aliased)
         let destIdx = 0;
         for (let y = 0; y < outH; y++) {
           const v = y / outH;
           for (let x = 0; x < outW; x++) {
             const u = x / outW;
             const wDenom = g * u + h * v + 1;
-            const srcX = Math.round((a * u + b * v + c) / wDenom);
-            const srcY = Math.round((d * u + e * v + f) / wDenom);
+            const fx = (a * u + b * v + c) / wDenom;
+            const fy = (d * u + e * v + f) / wDenom;
 
-            if (srcX >= 0 && srcX < sw && srcY >= 0 && srcY < sh) {
-              const srcIdx = (srcY * sw + srcX) * 4;
-              dPixels[destIdx] = sPixels[srcIdx];
-              dPixels[destIdx + 1] = sPixels[srcIdx + 1];
-              dPixels[destIdx + 2] = sPixels[srcIdx + 2];
+            const x0 = Math.floor(fx);
+            const y0 = Math.floor(fy);
+            const x1 = x0 + 1;
+            const y1 = y0 + 1;
+
+            if (x0 >= 0 && x1 < sw && y0 >= 0 && y1 < sh) {
+              const wx1 = fx - x0;
+              const wx0 = 1 - wx1;
+              const wy1 = fy - y0;
+              const wy0 = 1 - wy1;
+
+              const idx00 = (y0 * sw + x0) * 4;
+              const idx10 = (y0 * sw + x1) * 4;
+              const idx01 = (y1 * sw + x0) * 4;
+              const idx11 = (y1 * sw + x1) * 4;
+
+              for (let cIdx = 0; cIdx < 3; cIdx++) {
+                const val = (
+                  sPixels[idx00 + cIdx] * wx0 * wy0 +
+                  sPixels[idx10 + cIdx] * wx1 * wy0 +
+                  sPixels[idx01 + cIdx] * wx0 * wy1 +
+                  sPixels[idx11 + cIdx] * wx1 * wy1
+                );
+                dPixels[destIdx + cIdx] = Math.round(val);
+              }
               dPixels[destIdx + 3] = 255;
             } else {
+              // Jika luar kawasan, gantikan terus dengan warna putih kertas
               dPixels[destIdx] = 255;
               dPixels[destIdx + 1] = 255;
               dPixels[destIdx + 2] = 255;
@@ -1211,7 +1261,6 @@
         const h = canvas.height;
 
         // PENGESANAN LATAR ADAPTIF (ADAPTIVE PAPER ILLUMINATION ESTIMATOR)
-        // Membahagikan kanvas kepada grid untuk mengesan tahap kelabu kertas di bawah bayang lampu
         const gridX = 16;
         const gridY = 20;
         const bgGrid = [];
@@ -1227,7 +1276,6 @@
             const endX = Math.min(w, startX + blockW);
             const endY = Math.min(h, startY + blockH);
 
-            // Kumpul kecerahan sampel untuk mengesan warna latar kertas sebenar
             const samples = [];
             for (let sy = startY; sy < endY; sy += 4) {
               for (let sx = startX; sx < endX; sx += 4) {
@@ -1239,7 +1287,6 @@
 
             if (samples.length > 0) {
               samples.sort((a, b) => a - b);
-              // Ambil persentil ke-90 (mewakili permukaan kertas, mengabaikan teks gelap)
               const p90 = samples[Math.floor(samples.length * 0.90)];
               bgGrid[gy][gx] = Math.max(70, p90);
             } else {
@@ -1250,9 +1297,15 @@
 
         const contrastFactor = (259 * (contrast + 255)) / (255 * (259 - contrast));
 
-        // PROSES PEMUTIHAN & PEMBAIKAN WARNA KERTAS
+        // Lebar jidar pembersihan tepi dokumen (mencegah sisa meja/bayang bucu)
+        const edgeBandX = Math.round(w * 0.015);
+        const edgeBandY = Math.round(h * 0.015);
+
+        // PROSES PEMUTIHAN, PENAJAMAN TEKS & PENGISIAN TEPI KERTAS
         for (let y = 0; y < h; y++) {
           const gy = Math.min(gridY - 1, Math.floor(y / blockH));
+          const isNearEdgeY = y < edgeBandY || y >= h - edgeBandY;
+
           for (let x = 0; x < w; x++) {
             const gx = Math.min(gridX - 1, Math.floor(x / blockW));
             const localPaperBg = bgGrid[gy][gx];
@@ -1263,38 +1316,48 @@
             let b = d[i + 2];
 
             const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+            const isNearEdge = isNearEdgeY || x < edgeBandX || x >= w - edgeBandX;
 
-            // Nisbah kecerahan berbanding bayang kertas di lokasi ini
+            // Jika piksel berada di sempadan tepi paling luar dan bukan teks gelap pekat,
+            // ia adalah sisa meja atau herotan tepi: gantikan terus kepada putih kertas bersih!
+            if (isNearEdge && lum > 65) {
+              d[i] = 255;
+              d[i + 1] = 255;
+              d[i + 2] = 255;
+              continue;
+            }
+
+            // Nisbah kecerahan berbanding permukaan kertas setempat
             const normRatio = 255 / localPaperBg;
 
             if (this.activeFilter === 'magic' || this.activeFilter === 'clean') {
               // Formula CamScanner Magic & Clean:
-              // Menghapuskan bayang kelabu bilik dan menyatukan kertas dengan latar putih 100% (#FFFFFF)
-              if (lum >= localPaperBg * 0.82) {
-                // Bahagian ini adalah kertas berkabut/kelabu: tingkatkan kepada putih tulen
-                const blend = Math.min(1, (lum - localPaperBg * 0.82) / (localPaperBg * 0.16));
+              // Menghapuskan tompokan kelabu lampu dan bayang telefon
+              if (lum >= localPaperBg * 0.76) {
+                // Bahagian ini adalah kertas berkabut/kelabu: tingkatkan kepada 100% putih bersih
+                const blend = Math.min(1, (lum - localPaperBg * 0.76) / (localPaperBg * 0.20));
                 r = r * normRatio * (1 - blend) + 255 * blend;
                 g = g * normRatio * (1 - blend) + 255 * blend;
                 b = b * normRatio * (1 - blend) + 255 * blend;
               } else {
-                // Bahagian teks, logo dan tulisan tangan: pertajamkan dan legapkan
-                const darkFactor = this.activeFilter === 'clean' ? 0.78 : 0.85;
+                // Bahagian teks, logo dan tulisan tangan: pertajamkan dan legapkan dakwat
+                const darkFactor = this.activeFilter === 'clean' ? 0.70 : 0.78;
                 r = r * darkFactor;
                 g = g * darkFactor;
                 b = b * darkFactor;
               }
             } else if (this.activeFilter === 'bw') {
-              // Ambang hitam putih adaptif mengikut pencahayaan tempatan
+              // Ambang hitam putih adaptif berdefinisi tinggi
               const threshold = localPaperBg * 0.78;
-              const val = lum > threshold ? 255 : Math.max(0, lum * 0.35);
+              const val = lum > threshold ? 255 : Math.max(0, lum * 0.30);
               r = g = b = val;
             } else if (this.activeFilter === 'natural') {
-              // Mod Semula Jadi: Lembutkan bayang kelabu tanpa menghilangkan warna asli kertas
-              if (lum >= localPaperBg * 0.88) {
+              // Mod Semula Jadi HD: Terangkan latar belakang kertas tanpa merosakkan warna
+              if (lum >= localPaperBg * 0.84) {
                 const boost = Math.min(255, lum * normRatio);
-                r = Math.min(255, r * 0.4 + boost * 0.6);
-                g = Math.min(255, g * 0.4 + boost * 0.6);
-                b = Math.min(255, b * 0.4 + boost * 0.6);
+                r = Math.min(255, r * 0.35 + boost * 0.65);
+                g = Math.min(255, g * 0.35 + boost * 0.65);
+                b = Math.min(255, b * 0.35 + boost * 0.65);
               }
             }
 
@@ -1310,6 +1373,53 @@
         }
 
         ctx.putImageData(imgData, 0, 0);
+
+        // PENAJAMAN TEKS TAHAP TINGGI (CAMSCANNER UNSHARP MASKING)
+        // Menajamkan sempadan dakwat teks dan nombor kecil supaya sangat jelas
+        if (this.activeFilter === 'magic' || this.activeFilter === 'clean' || this.activeFilter === 'bw') {
+          this.applyUnsharpMask(ctx, w, h, 0.45);
+        }
+      }
+
+      /**
+       * Penapis Penajaman Tulisan (Unsharp Mask):
+       * Mengasingkan frekuensi tinggi (teks/garisan) dan meningkatkannya
+       * agar tidak kabur walaupun gambar diambil pada jarak biasa.
+       */
+      applyUnsharpMask(ctx, w, h, amount = 0.45) {
+        const srcData = ctx.getImageData(0, 0, w, h);
+        const s = srcData.data;
+        const outData = ctx.createImageData(w, h);
+        const o = outData.data;
+
+        // Salin data asas
+        o.set(s);
+
+        // Kernel Laplacian 3x3 untuk pengesanan sempadan huruf
+        for (let y = 1; y < h - 1; y++) {
+          const rowPrev = (y - 1) * w;
+          const rowCurr = y * w;
+          const rowNext = (y + 1) * w;
+
+          for (let x = 1; x < w - 1; x++) {
+            const idx = (rowCurr + x) * 4;
+
+            for (let c = 0; c < 3; c++) {
+              const center = s[idx + c];
+              const up    = s[(rowPrev + x) * 4 + c];
+              const down  = s[(rowNext + x) * 4 + c];
+              const left  = s[(rowCurr + x - 1) * 4 + c];
+              const right = s[(rowCurr + x + 1) * 4 + c];
+
+              // Laplacian: 4 * center - (up + down + left + right)
+              const edge = (center * 4) - (up + down + left + right);
+              const sharpVal = center + edge * amount;
+              o[idx + c] = Math.min(255, Math.max(0, sharpVal));
+            }
+          }
+        }
+
+        ctx.putImageData(outData, 0, 0);
       }
 
       saveCurrentEdit() {
