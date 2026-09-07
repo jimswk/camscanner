@@ -26,8 +26,8 @@
       touch-action: manipulation;
     }
     /* Sokongan kawasan selamat notch & gesture bar */
-    .pt-safe { padding-top: max(env(safe-area-inset-top, 0px), 10px); }
-    .pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 16px); }
+    .pt-safe { padding-top: max(env(safe-area-inset-top, 0px), 8px); }
+    .pb-safe { padding-bottom: max(env(safe-area-inset-bottom, 0px), 14px); }
 
     /* Sembunyikan scrollbar tetapi kekalkan kebolehan menatal */
     .no-scrollbar::-webkit-scrollbar { display: none; }
@@ -55,10 +55,10 @@
     }
   </style>
 </head>
-<body class="bg-slate-950 text-slate-100 flex items-center justify-center font-sans antialiased selection:bg-emerald-500 selection:text-white">
+<body class="bg-slate-950 text-slate-100 flex items-center justify-center font-sans antialiased selection:bg-emerald-500 selection:text-white fixed inset-0 w-full h-full overflow-hidden">
 
   <!-- BEKAS APLIKASI TELEFON (Mobile Shell Container) -->
-  <div class="w-full max-w-md h-full flex flex-col bg-slate-950 shadow-2xl relative overflow-hidden border-x border-slate-900/60">
+  <div class="w-full max-w-md h-full flex flex-col bg-slate-950 shadow-2xl relative overflow-hidden border-x border-slate-900/60 min-h-0">
 
     <!-- ================= NOTIFIKASI TOAST (PENGGANTI ALERT) ================= -->
     <div id="toast" class="fixed top-5 left-1/2 -translate-x-1/2 z-50 transform transition-all duration-300 opacity-0 pointer-events-none translate-y-[-20px] bg-slate-900/95 border border-emerald-500/40 text-white px-4 py-2.5 rounded-full shadow-2xl backdrop-blur-lg flex items-center gap-2.5 text-xs font-medium max-w-[90%]">
@@ -67,7 +67,7 @@
     </div>
 
     <!-- ================= BAR UTAMA ATAS (HEADER NATIVE) ================= -->
-    <header class="bg-slate-900/80 border-b border-slate-800/80 px-4 pt-safe pb-2.5 sticky top-0 z-40 backdrop-blur-xl flex items-center justify-between">
+    <header class="shrink-0 bg-slate-900/80 border-b border-slate-800/80 px-4 pt-safe pb-2.5 sticky top-0 z-40 backdrop-blur-xl flex items-center justify-between">
       <div class="flex items-center gap-2.5">
         <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center shadow-lg shadow-emerald-950/50">
           <i data-lucide="scan-line" class="w-4 h-4 text-slate-950 stroke-[2.5]"></i>
@@ -87,13 +87,13 @@
     </header>
 
     <!-- ================= KANDUNGAN UTAMA (VIEW MOD) ================= -->
-    <main class="flex-1 flex flex-col relative overflow-hidden">
+    <main class="flex-1 flex flex-col relative overflow-hidden min-h-0">
 
       <!-- 1. VIEW KAMERA & IMBASAN -->
-      <section id="view-camera" class="flex-1 flex flex-col relative bg-black">
+      <section id="view-camera" class="flex-1 flex flex-col relative bg-black min-h-0">
         
         <!-- Pemilih Mod Imbasan (Segmented Tabs ala Native App) -->
-        <div class="bg-slate-950/75 backdrop-blur-md px-3 py-2 z-10">
+        <div class="shrink-0 bg-slate-950/75 backdrop-blur-md px-3 py-1.5 z-10">
           <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
             <button onclick="app.setMode('document')" id="tab-mode-document" class="mode-tab shrink-0 active px-3.5 py-1.5 rounded-full text-xs font-medium flex items-center gap-1.5 transition-all bg-emerald-600 text-white shadow-sm">
               <i data-lucide="file-text" class="w-3.5 h-3.5"></i>
@@ -115,7 +115,7 @@
         </div>
 
         <!-- Panduan Muka Kad (Langkah 1 & 2) -->
-        <div id="card-step-indicator" class="hidden absolute top-14 left-0 right-0 z-20 flex justify-center px-4">
+        <div id="card-step-indicator" class="hidden absolute top-12 left-0 right-0 z-20 flex justify-center px-4">
           <div class="bg-slate-900/90 border border-emerald-500/30 backdrop-blur-md px-3.5 py-1 rounded-full shadow-lg flex items-center gap-2.5">
             <span id="card-step-badge" class="w-4 h-4 rounded-full bg-emerald-500 text-slate-950 font-black text-[10px] flex items-center justify-center">1</span>
             <span id="card-step-text" class="text-xs font-semibold text-emerald-400">Imbas Bahagian DEPAN</span>
@@ -123,11 +123,11 @@
         </div>
 
         <!-- Viewport Kamera Sebenar -->
-        <div class="relative flex-1 flex items-center justify-center overflow-hidden">
+        <div class="relative flex-1 min-h-0 flex items-center justify-center overflow-hidden">
           <video id="camera-feed" autoplay playsinline muted class="w-full h-full object-cover"></video>
 
           <!-- Garis Panduan / Overlay Berdasarkan Mod -->
-          <div id="guide-overlay" class="absolute inset-0 pointer-events-none flex items-center justify-center p-6">
+          <div id="guide-overlay" class="absolute inset-0 pointer-events-none flex items-center justify-center p-4">
             <div id="guide-frame" class="relative border-2 border-emerald-400/80 rounded-2xl shadow-[0_0_0_9999px_rgba(0,0,0,0.65)] transition-all duration-300 w-full max-w-xs aspect-[1/1.414]">
               <!-- Sudut Penanda (Corner brackets) -->
               <div class="absolute -top-1 -left-1 w-6 h-6 border-t-4 border-l-4 border-emerald-400 rounded-tl"></div>
@@ -137,7 +137,7 @@
               <!-- Laser animasi -->
               <div class="scan-laser"></div>
               <!-- Label Panduan -->
-              <span id="guide-label" class="absolute bottom-3 left-1/2 -translate-x-1/2 text-[10px] bg-slate-950/80 px-2.5 py-1 rounded-full text-slate-200 backdrop-blur-sm border border-slate-700/80 whitespace-nowrap shadow-md">
+              <span id="guide-label" class="absolute bottom-2 left-1/2 -translate-x-1/2 text-[10px] bg-slate-950/80 px-2.5 py-0.5 rounded-full text-slate-200 backdrop-blur-sm border border-slate-700/80 whitespace-nowrap shadow-md">
                 Sejajarkan dokumen dalam bingkai
               </span>
             </div>
@@ -161,10 +161,10 @@
         </div>
 
         <!-- Kawalan Bar Bawah Native (Shutter Dock) -->
-        <div class="bg-slate-950/95 border-t border-slate-900 px-6 pt-3 pb-safe flex items-center justify-between z-20">
+        <div class="shrink-0 bg-slate-950/95 border-t border-slate-900 px-6 pt-2 pb-safe flex items-center justify-between z-30">
           <!-- Thumbnail Pratonton Terakhir / Buka Senarai -->
           <div class="relative">
-            <button onclick="app.showPageListModal()" class="w-12 h-12 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden active:scale-95 transition-all shadow-md">
+            <button onclick="app.showPageListModal()" class="w-11 h-11 rounded-xl bg-slate-900 border border-slate-800 flex items-center justify-center overflow-hidden active:scale-95 transition-all shadow-md">
               <img id="recent-thumb-img" class="w-full h-full object-cover hidden" alt="Thumb">
               <i id="recent-thumb-icon" data-lucide="layers" class="w-5 h-5 text-slate-400"></i>
             </button>
@@ -173,7 +173,7 @@
 
           <!-- Butang Tangkap Gambar Utama (Tactile Native Shutter) -->
           <button id="btn-capture" onclick="app.captureCurrentFrame()" class="shutter-btn group p-1 active:scale-90 transition-all duration-150">
-            <div class="w-[68px] h-[68px] rounded-full border-[3px] border-emerald-400/80 p-1 flex items-center justify-center shadow-lg shadow-emerald-950/40">
+            <div class="w-[62px] h-[62px] rounded-full border-[3px] border-emerald-400/80 p-1 flex items-center justify-center shadow-lg shadow-emerald-950/40">
               <div class="shutter-inner w-full h-full bg-emerald-500 group-hover:bg-emerald-400 rounded-full flex items-center justify-center transition-transform">
                 <i data-lucide="camera" class="w-6 h-6 text-slate-950 stroke-[2.5]"></i>
               </div>
@@ -194,10 +194,10 @@
       </section>
 
       <!-- 2. VIEW EDITOR & PENAPIS (CAMSCANNER FILTERS) -->
-      <section id="view-editor" class="hidden flex-1 flex flex-col bg-slate-950">
+      <section id="view-editor" class="hidden flex-1 flex flex-col bg-slate-950 min-h-0">
         
         <!-- Bar Atas Editor -->
-        <div class="px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+        <div class="shrink-0 px-4 py-2.5 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
           <button onclick="app.cancelEditing()" class="p-1.5 rounded-lg text-slate-400 hover:text-white flex items-center gap-1 text-xs font-medium active:scale-95">
             <i data-lucide="chevron-left" class="w-4 h-4"></i>
             <span>Batal</span>
@@ -210,14 +210,14 @@
         </div>
 
         <!-- Kawasan Kanvas Pratonton Imej -->
-        <div class="flex-1 flex items-center justify-center p-3 overflow-hidden relative bg-black/40">
+        <div class="flex-1 min-h-0 flex items-center justify-center p-3 overflow-hidden relative bg-black/40">
           <div class="relative max-w-full max-h-full flex items-center justify-center shadow-2xl rounded-xl overflow-hidden border border-slate-800 bg-slate-900/50">
             <canvas id="editor-canvas" class="max-w-full max-h-[50vh] object-contain"></canvas>
           </div>
         </div>
 
         <!-- Pilihan Penapis & Pelaras Bawah Mobile -->
-        <div class="bg-slate-900/95 border-t border-slate-800 px-4 pt-3 pb-safe flex flex-col gap-3 backdrop-blur-xl">
+        <div class="shrink-0 bg-slate-900/95 border-t border-slate-800 px-4 pt-2 pb-safe flex flex-col gap-2.5 backdrop-blur-xl">
           <!-- Butang Penapis -->
           <div class="grid grid-cols-4 gap-2">
             <button onclick="app.applyPreset('natural')" id="preset-natural" class="preset-btn active p-2 rounded-xl bg-slate-800/90 border-2 border-emerald-500 flex flex-col items-center gap-1 text-center">
@@ -259,9 +259,9 @@
       </section>
 
       <!-- 3. VIEW PAPARAN HALAMAN (NATIVE MOBILE PAGE GALLERY) -->
-      <section id="view-doc-list" class="hidden flex-1 flex flex-col bg-slate-950">
+      <section id="view-doc-list" class="hidden flex-1 flex flex-col bg-slate-950 min-h-0">
         <!-- Bar Navigasi Galeri -->
-        <div class="px-4 py-3 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+        <div class="shrink-0 px-4 py-3 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
           <button onclick="app.switchView('camera')" class="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-slate-800 text-slate-200 text-xs font-semibold active:scale-95">
             <i data-lucide="camera" class="w-3.5 h-3.5 text-emerald-400"></i>
             <span>Imbas Lagi</span>
@@ -278,12 +278,12 @@
         </div>
 
         <!-- Grid Halaman Dokumen Bergerak Lancar -->
-        <div id="pages-container" class="flex-1 p-3.5 overflow-y-auto no-scrollbar grid grid-cols-2 gap-3 auto-rows-max">
+        <div id="pages-container" class="flex-1 min-h-0 p-3.5 overflow-y-auto no-scrollbar grid grid-cols-2 gap-3 auto-rows-max">
           <!-- Kad muka surat dimasukkan secara dinamik -->
         </div>
 
         <!-- Tindakan Muat Turun Bawah Skrin -->
-        <div class="p-3.5 bg-slate-900/95 border-t border-slate-800/90 pb-safe flex flex-col gap-2.5 backdrop-blur-xl">
+        <div class="shrink-0 p-3.5 bg-slate-900/95 border-t border-slate-800/90 pb-safe flex flex-col gap-2.5 backdrop-blur-xl">
           <div class="flex items-center justify-between text-[11px] text-slate-400 px-1 font-medium">
             <span id="pdf-page-count-text">0 Muka Surat Disimpan</span>
             <span class="text-emerald-400 flex items-center gap-1">
